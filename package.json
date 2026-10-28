@@ -1,10 +1,10 @@
 {
-	"name": "vscode-dbml",
-	"displayName": "vscode-dbml",
-	"description": "Language support for the Database Markup Language",
+	"name": "dbml-visual-editor",
+	"displayName": "Visual Editor for DBML",
+	"description": "Offline visual editor and language support for DBML: pan, zoom, arrange and edit your schema as a diagram.",
 	"icon": "images/dbml-logo.png",
-	"version": "0.4.1",
-	"publisher": "matt-meyers",
+	"version": "0.1.0",
+	"publisher": "nopparuj",
 	"engines": {
 		"vscode": "^1.140.0"
 	},
@@ -14,9 +14,9 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/mattmeyers/vscode-dbml.git"
+		"url": "https://github.com/Nopparuj-an/dbml-visual-editor.git"
 	},
-	"main": "./dist/main.js",
+	"main": "./dist/extension.js",
 	"contributes": {
 		"languages": [
 			{
@@ -52,33 +52,43 @@
 		"menus": {
 			"commandPalette": [
 				{
-					"command": "vscode-dbml.export",
+					"command": "dbmlVisualEditor.open",
 					"when": "editorLangId == dbml"
 				},
 				{
-					"command": "vscode-dbml.import",
+					"command": "dbmlVisualEditor.toSql",
+					"when": "editorLangId == dbml"
+				},
+				{
+					"command": "dbmlVisualEditor.fromSql",
 					"when": "editorLangId == sql"
 				}
 			]
 		},
 		"commands": [
 			{
-				"command": "vscode-dbml.export",
+				"command": "dbmlVisualEditor.open",
+				"title": "Open Visual Editor",
+				"category": "DBML"
+			},
+			{
+				"command": "dbmlVisualEditor.toSql",
 				"title": "To SQL",
 				"category": "DBML"
 			},
 			{
-				"command": "vscode-dbml.import",
+				"command": "dbmlVisualEditor.fromSql",
 				"title": "From SQL",
 				"category": "DBML"
 			}
 		]
 	},
 	"scripts": {
-		"vscode:prepublish": "esbuild src/main.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/main.js --sourcemap --minify",
-		"build": "esbuild src/main.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/main.js --sourcemap",
-		"watch": "esbuild src/main.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/main.js --sourcemap --watch",
+		"vscode:prepublish": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js --sourcemap --minify && esbuild src/webview/main.ts --bundle --platform=browser --format=iife --outfile=dist/webview.js --sourcemap --minify",
+		"build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js --sourcemap && esbuild src/webview/main.ts --bundle --platform=browser --format=iife --outfile=dist/webview.js --sourcemap",
+		"watch": "npm run build -- --watch",
 		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
 		"package": "vsce package"
 	},
 	"devDependencies": {
@@ -86,14 +96,10 @@
 		"@types/vscode": "^1.140.0",
 		"@vscode/vsce": "^4.0.0",
 		"esbuild": "^0.28.2",
-		"typescript": "^7.0.2"
+		"typescript": "^7.0.2",
+		"vitest": "^5.0.5"
 	},
 	"dependencies": {
 		"@dbml/core": "^11.0.0"
-	},
-	"__metadata": {
-		"id": "4cea5698-223c-41b3-809b-a904d516f061",
-		"publisherDisplayName": "Matt Meyers",
-		"publisherId": "568bceb1-d747-4b35-8b70-2913492d364a"
 	}
 }

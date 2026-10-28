@@ -1,6 +1,15 @@
 # Change Log
 
-All notable changes to the "vscode-dbml" extension will be documented in this file.
+All notable changes to the "Visual Editor for DBML" extension will be documented in this file.
+
+## [0.1.0] - Unreleased
+### Changed
+- Rebranded from vscode-dbml to Visual Editor for DBML; command IDs are now `dbmlVisualEditor.*`
+- Replaced webpack with esbuild, updated all dependencies (`@dbml/core` 11)
+### Added
+- `DBML: Open Visual Editor` command with webview scaffold, parse model, and layout sidecar format
+
+## Earlier history (vscode-dbml by Matthew Meyers)
 
 ## [0.4.1] - 2024-10-14
 ### Added

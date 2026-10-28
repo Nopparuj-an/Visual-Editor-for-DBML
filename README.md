@@ -1,20 +1,16 @@
-> ## ⚠️ Please Read ⚠️
-> 
-> I no longer use VS Code or DBML, and therefore have no intention to maintain this extension.
-> Feel free to fork this repo if you notice any problems as issues will no longer be fixed.
+# Visual Editor for DBML
 
+An offline visual editor and language support for the Database Markup Language ([DBML](https://dbml.org)) in VS Code. No account, no sign-in.
 
-# DBML Language Support
+> **Status: early development.** Run `DBML: Open Visual Editor` on a `.dbml` file to open the diagram panel. At this stage it only parses the file and reports table and ref counts; the canvas is being built. See [PLAN.md](./PLAN.md).
 
-[![Version 0.4.1 Badge][version-badge]][changelog] [![MIT License Badge][license-badge]][license]
-
-This Visual Studio Code extension provides language support for the Database Markup Language ([DBML](https://dbml.org)).
+Layout (positions, views, notes, containers) is stored in a sidecar file, `<name>.dbml.layout.json`, which you can commit or gitignore.
 
 ## Syntax Highlighting
 
 Syntax highlighting is enabled for files with the `.dbml` extension.
 
-![Syntax Example](https://raw.githubusercontent.com/mattmeyers/vscode-dbml/master/images/dbml_syntax_example.png)
+![Syntax Example](https://raw.githubusercontent.com/Nopparuj-an/dbml-visual-editor/master/images/dbml_syntax_example.png)
 
 ## Commands
 
@@ -39,15 +35,10 @@ Snippets are provided for quickly creating tables, enums, and references. To use
 - `mto`: Create a many-to-one reference
 - `mtm`: Create a many-to-many join table
 
-## Issues
+## Credits
 
-If you find an error or bug, please [create an issue](https://github.com/mattmeyers/vscode-dbml/issues/new).
+This project began from [mattmeyers/vscode-dbml](https://github.com/mattmeyers/vscode-dbml) (MIT, Copyright (c) 2019 Matthew Meyers), which provided the syntax grammar, snippets, and SQL import/export commands. It has since been rebranded and is developed independently.
 
-## Contributing
+Not affiliated with Holistics, dbdiagram.io, or the DBML project. DBML is used here only to describe the file format this extension supports.
 
-If you want to add to this project, feel free to fork the repository and submit a pull request.
-
-[changelog]: ./CHANGELOG.md
 [license]: ./LICENSE
-[version-badge]: https://img.shields.io/badge/version-0.4.1-blue.svg
-[license-badge]: https://img.shields.io/badge/license-MIT-blue.svg

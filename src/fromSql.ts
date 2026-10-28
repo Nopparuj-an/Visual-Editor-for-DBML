@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { importer } from "@dbml/core";
 import * as fs from "fs";
 import * as path from "path";
-import { Dialect } from "./main";
+import { Dialect } from "./extension";
 
 export default class Importer {
   public async import(): Promise<void> {
