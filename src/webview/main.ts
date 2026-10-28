@@ -400,12 +400,18 @@ function render() {
     }
     for (const c of t.columns) {
       const row = h("div", "col");
-      row.append(h("span", "name", c.name), h("span", "type", c.type));
+      const en = c.enumId ? schema.enums.find(e => e.id === c.enumId) : undefined;
+      const enumInfo = en ? `enum ${en.name}\n${en.values.map(v => `• ${v.name}${v.note ? ` — ${v.note}` : ""}`).join("\n")}` : "";
+      const type = h("span", "type", c.type);
+      tip(type, enumInfo);
+      row.append(h("span", "name", c.name), type);
       for (const [on, label, hint] of [
         [c.pk, "PK", "Primary key"],
         [fks.has(`${t.id}.${c.name}`), "FK", "Foreign key"],
+        [c.notNull, "NN", "Not null"],
         [c.unique, "UQ", "Unique"],
-        [c.increment, "AI", "Auto increment"]
+        [c.increment, "AI", "Auto increment"],
+        [!!enumInfo, "E", enumInfo]
       ] as const) {
         if (on) {
           const b = h("span", "badge", label);

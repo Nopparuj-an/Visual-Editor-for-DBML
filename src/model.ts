@@ -12,8 +12,17 @@ export interface ColumnModel {
   notNull: boolean;
   unique: boolean;
   increment: boolean;
+  /** Id of the enum this column's type refers to, if any. */
+  enumId?: string;
   note?: string;
   range: SourceRange;
+}
+
+export interface EnumModel {
+  /** `schema.name` (schema omitted when default). */
+  id: string;
+  name: string;
+  values: { name: string; note?: string }[];
 }
 
 export interface TableModel {
@@ -53,6 +62,7 @@ export interface SchemaModel {
   tables: TableModel[];
   refs: RefModel[];
   notes: NoteModel[];
+  enums: EnumModel[];
 }
 
 const tableId = (schema: string | null | undefined, name: string) =>
@@ -63,11 +73,30 @@ const rangeOf = (token: any): SourceRange => ({
   endLine: token.end.line - 1
 });
 
+/** An unqualified type name resolves within the table's own schema first, then the default one. */
+function enumIdOf(type: any, schema: string | undefined, enums: EnumModel[]): string | undefined {
+  const name: string = type.type_name;
+  const wanted = type.schemaName ? [tableId(type.schemaName, name)] : [tableId(schema, name), name];
+  return enums.find(e => wanted.includes(e.id))?.id;
+}
+
 /** Parse DBML source into a plain, serializable model. Throws on syntax errors. */
 export function parseDbml(source: string): SchemaModel {
   const db = new Parser().parse(source, "dbmlv2");
   const tables: TableModel[] = [];
   const refs: RefModel[] = [];
+  const enums: EnumModel[] = [];
+
+  for (const schema of db.schemas) {
+    const schemaName = schema.name === "public" ? undefined : schema.name;
+    for (const e of schema.enums ?? []) {
+      enums.push({
+        id: tableId(schemaName, e.name),
+        name: e.name,
+        values: e.values.map((v: any) => ({ name: v.name, note: v.note || undefined }))
+      });
+    }
+  }
 
   for (const schema of db.schemas) {
     const schemaName = schema.name === "public" ? undefined : schema.name;
@@ -86,6 +115,7 @@ export function parseDbml(source: string): SchemaModel {
           notNull: !!f.not_null,
           unique: !!f.unique,
           increment: !!f.increment,
+          enumId: enumIdOf(f.type, schemaName, enums),
           note: f.note || undefined,
           range: rangeOf(f.token)
         }))
@@ -110,7 +140,7 @@ export function parseDbml(source: string): SchemaModel {
     content: n.content ?? "",
     range: rangeOf(n.token)
   }));
-  return { tables, refs, notes };
+  return { tables, refs, notes, enums };
 }
 
 /** The DBML compiler throws an object with `diags` rather than a normal Error message. */

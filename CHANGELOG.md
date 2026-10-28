@@ -11,6 +11,8 @@ All notable changes to the "Visual Editor for DBML" extension will be documented
 - Link mode and insert mode to add refs and columns by dragging
 - Layout sidecar file `<name>.dbml.layout.json`
 - SQL Server import
+- Not null (NN) and enum (E) badges; hovering an enum shows its name and values
+- Release workflow: pushing a `v*` tag builds the `.vsix` and attaches it to a GitHub release
 
 ### Changed
 - Rebranded from vscode-dbml to Visual Editor for DBML; command IDs are now `dbmlVisualEditor.*`

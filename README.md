@@ -13,7 +13,7 @@ Open a `.dbml` file and click the preview icon in the editor title bar, or run *
 - Drag a table by its header. Shift-click or shift-drag a rectangle to select several tables and move them together.
 - Click a column or a line to highlight its refs and dim the rest. Arrows point from the "many" side to the referenced key.
 - Double-click a table, a column or a line to jump to its code. The cursor lands at the end of that line.
-- Tables show a one-line preview of their note (hover for the full text) and badges for primary key, foreign key, unique, auto increment and column notes.
+- Tables show a one-line preview of their note (hover for the full text) and badges for primary key, foreign key, not null, unique, auto increment, enum and column notes. Hover an enum badge (or its type) to see the enum name and values.
 
 **Lines**
 - Lines are horizontal and vertical only. They route around tables and spread into separate lanes so they don't run on top of each other.
@@ -66,6 +66,8 @@ npm test
 ```
 
 Press F5 to launch an Extension Development Host. `npm run package` builds a `.vsix`.
+
+To release: bump `version` in `package.json` and `CHANGELOG.md`, commit, then push a matching tag (`git tag v0.1.0 && git push origin v0.1.0`). The Release workflow checks the tag against `package.json`, runs the tests, builds the `.vsix` and attaches it to a GitHub release.
 
 ## Credits
 
