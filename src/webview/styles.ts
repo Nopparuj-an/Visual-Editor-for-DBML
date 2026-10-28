@@ -5,7 +5,7 @@ body { background: var(--vscode-editor-background); color: var(--vscode-editor-f
 #viewport { position: absolute; inset: 0 0 0 240px; overflow: hidden; cursor: grab; }
 #viewport.panning { cursor: grabbing; }
 #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
-#lines { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; }
+#lines { z-index: 1; position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; }
 .ref-hit { stroke: transparent; stroke-width: 14; fill: none; cursor: pointer; pointer-events: stroke; }
 .ref { stroke: var(--vscode-editorLineNumber-foreground); stroke-width: 1.5; fill: none; pointer-events: none; }
 .ref.hot { stroke: var(--vscode-focusBorder); stroke-width: 2.5; }
@@ -13,7 +13,7 @@ body { background: var(--vscode-editor-background); color: var(--vscode-editor-f
 .card { fill: var(--vscode-descriptionForeground); font-size: 11px; pointer-events: none; }
 .card.hot { fill: var(--vscode-focusBorder); font-weight: bold; }
 marker path { fill: context-stroke; }
-.table { position: absolute; box-sizing: border-box; background: var(--vscode-editorWidget-background);
+.table { z-index: 2; position: absolute; box-sizing: border-box; background: var(--vscode-editorWidget-background);
   border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border)); border-radius: 6px;
   overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
 .table.hot { border-color: var(--vscode-focusBorder); }
@@ -26,6 +26,12 @@ marker path { fill: context-stroke; }
 .col.hot { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
 .col .name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .col .type { opacity: .6; }
+.table-note { height: 20px; line-height: 20px; padding: 0 10px; font-style: italic; opacity: .7; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border)); box-sizing: border-box; }
+#overlay { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; z-index: 3; }
+.handle { fill: var(--vscode-focusBorder); stroke: var(--vscode-editor-background); stroke-width: 2; pointer-events: all; cursor: grab; }
+.handle.ghost { fill: var(--vscode-editor-background); stroke: var(--vscode-focusBorder); stroke-width: 1.5; opacity: .8; }
+.badge.note { border-radius: 50%; padding: 0 5px; font-style: italic; }
 .col .badge { opacity: .8; font-size: 9px; font-weight: 700; align-self: center; border: 1px solid currentColor;
   border-radius: 3px; padding: 0 3px; line-height: 12px; }
 #bar { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 4px; padding: 4px; border-radius: 6px;

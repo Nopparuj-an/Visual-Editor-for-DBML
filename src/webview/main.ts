@@ -13,6 +13,7 @@ const ROW_H = 22;
 const PAD_B = 2;
 const BORDER = 1;
 const STUB = 18;
+const NOTE_H = 20;
 const GAP_X = 120;
 const GAP_Y = 40;
 const MIN_ZOOM = 0.1;
@@ -38,7 +39,8 @@ function s<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, s
   return e;
 }
 
-const tableHeight = (t: TableModel) => HEAD_H + t.columns.length * ROW_H + PAD_B + BORDER * 2;
+const headHeight = (t: TableModel) => HEAD_H + (t.note ? NOTE_H : 0);
+const tableHeight = (t: TableModel) => headHeight(t) + t.columns.length * ROW_H + PAD_B + BORDER * 2;
 
 let schema: SchemaModel | null = null;
 let layout: LayoutFile | null = null;
@@ -59,7 +61,11 @@ lines.id = "lines";
 lines.innerHTML = `<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,1 L10,5 L0,9 z"/></marker></defs>`;
 const linesLayer = s("g");
 lines.appendChild(linesLayer);
-world.append(lines);
+const overlay = s("svg");
+overlay.id = "overlay";
+const handles = s("g");
+overlay.append(handles);
+world.append(lines, overlay);
 viewport.append(world);
 const msg = h("div");
 msg.id = "msg";
@@ -256,6 +262,14 @@ function render() {
     return;
   }
   placeNewTables();
+  const fks = new Set<string>();
+  for (const r of schema.refs) {
+    for (const e of [r.from, r.to]) {
+      if (e.relation === "*" || (r.from.relation === "1" && r.to.relation === "1" && e === r.from)) {
+        e.columns.forEach(c => fks.add(`${e.table}.${c}`));
+      }
+    }
+  }
   for (const id of [...selected]) {
     if (!schema.tables.some(t => t.id === id)) {
       selected.delete(id);
@@ -280,13 +294,31 @@ function render() {
     head.ondblclick = () => api.postMessage({ type: "reveal", line: t.range.startLine });
     head.onpointerdown = e => dragTable(e, t);
     el.append(head);
+    if (t.note) {
+      const note = h("div", "table-note", t.note.replace(/\s+/g, " "));
+      note.title = t.note;
+      el.append(note);
+    }
     for (const c of t.columns) {
       const row = h("div", "col");
       row.append(h("span", "name", c.name), h("span", "type", c.type));
-      if (c.pk) {
-        row.append(h("span", "badge", "PK"));
+      for (const [on, label, tip] of [
+        [c.pk, "PK", "Primary key"],
+        [fks.has(`${t.id}.${c.name}`), "FK", "Foreign key"],
+        [c.unique, "UQ", "Unique"],
+        [c.increment, "AI", "Auto increment"]
+      ] as const) {
+        if (on) {
+          const b = h("span", "badge", label);
+          b.title = tip;
+          row.append(b);
+        }
       }
-      row.title = c.note ?? "";
+      if (c.note) {
+        const n = h("span", "badge note", "i");
+        n.title = c.note;
+        row.append(n);
+      }
       row.ondblclick = () => api.postMessage({ type: "reveal", line: c.range.startLine });
       row.onclick = () => select(null, { table: t.id, column: c.name });
       colEls.set(`${t.id}.${c.name}`, row);
@@ -295,6 +327,7 @@ function render() {
     tableEls.set(t.id, el);
     world.append(el);
   }
+  world.append(overlay);
   drawRefs();
   applyCamera();
   applySelection();
@@ -347,11 +380,29 @@ function anchor(tableId: string, column: string, side: 1 | -1): Anchor | null {
   if (!t || !p || i < 0) {
     return null;
   }
-  return { x: p.x + (side === 1 ? TABLE_W : 0), y: p.y + BORDER + HEAD_H + i * ROW_H + ROW_H / 2, dir: side };
+  return { x: p.x + (side === 1 ? TABLE_W : 0), y: p.y + BORDER + headHeight(t) + i * ROW_H + ROW_H / 2, dir: side };
+}
+
+type Pt = { x: number; y: number };
+/** Waypoints (plus the two stub ends) per ref id, as drawn; used for the bend handles. */
+let geometry = new Map<string, Pt[]>();
+
+const mid = (p: Pt, q: Pt): Pt => ({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 });
+
+/** Polyline through the points with rounded corners (quadratic curves at each waypoint). */
+function bentPath(a: Pt, b: Pt, p: Pt[]) {
+  let d = `M${a.x},${a.y} L${p[0].x},${p[0].y}`;
+  d += p.length > 2 ? ` L${mid(p[0], p[1]).x},${mid(p[0], p[1]).y}` : "";
+  for (let i = 1; i < p.length - 1; i++) {
+    const m = mid(p[i], p[i + 1]);
+    d += ` Q${p[i].x},${p[i].y} ${m.x},${m.y}`;
+  }
+  return `${d} L${p[p.length - 1].x},${p[p.length - 1].y} L${b.x},${b.y}`;
 }
 
 function drawRefs() {
   linesLayer.replaceChildren();
+  geometry = new Map();
   for (const r of schema!.refs) {
     // Draw from the "many" side toward the "one" side so the arrowhead points at the referenced key.
     const [src, dst] = r.from.relation === "1" && r.to.relation === "*" ? [r.to, r.from] : [r.from, r.to];
@@ -372,8 +423,12 @@ function drawRefs() {
     }
     // Straight stubs leave/enter each table horizontally, so the curve never bends right at the arrowhead.
     const ax = a.x + a.dir * STUB, bx = b.x + b.dir * STUB;
+    const wps = view().lines[r.id] ?? [];
     const reach = Math.max(40, Math.abs(bx - ax) / 2);
-    const d = `M${a.x},${a.y} L${ax},${a.y} C${ax + a.dir * reach},${a.y} ${bx + b.dir * reach},${b.y} ${bx},${b.y} L${b.x},${b.y}`;
+    const d = wps.length
+      ? bentPath(a, b, [{ x: ax, y: a.y }, ...wps, { x: bx, y: b.y }])
+      : `M${a.x},${a.y} L${ax},${a.y} C${ax + a.dir * reach},${a.y} ${bx + b.dir * reach},${b.y} ${bx},${b.y} L${b.x},${b.y}`;
+    geometry.set(r.id, [{ x: ax, y: a.y }, ...wps, { x: bx, y: b.y }]);
     const g = s("g", { "data-ref": r.id });
     g.append(
       s("path", { d, class: "ref", "marker-end": "url(#arrow)" }),
@@ -392,6 +447,79 @@ function cardinality(at: Anchor, label: string) {
   const t = s("text", { x: at.x + at.dir * 10, y: at.y - 5, class: "card", "text-anchor": at.dir === 1 ? "start" : "end" });
   t.textContent = label;
   return t;
+}
+
+// --- Line bending ----------------------------------------------------------
+function toWorld(ev: { clientX: number; clientY: number }): Pt {
+  const r = viewport.getBoundingClientRect();
+  const c = view().camera;
+  return { x: (ev.clientX - r.left - c.x) / c.zoom, y: (ev.clientY - r.top - c.y) / c.zoom };
+}
+
+function drawHandles() {
+  handles.replaceChildren();
+  const pts = selectedRef ? geometry.get(selectedRef) : undefined;
+  if (!selectedRef || !pts) {
+    return;
+  }
+  const id = selectedRef;
+  const wps = () => (view().lines[id] ??= []);
+  // Ghost handles halfway along each segment: drag one to add a bend there.
+  for (let i = 0; i < pts.length - 1; i++) {
+    const m = mid(pts[i], pts[i + 1]);
+    const c = s("circle", { cx: m.x, cy: m.y, r: 5, class: "handle ghost" });
+    c.addEventListener("pointerdown", e => {
+      e.stopPropagation();
+      wps().splice(i, 0, toWorld(e));
+      dragWaypoint(id, i);
+      drawRefs();
+    });
+    handles.append(c);
+  }
+  for (let i = 1; i < pts.length - 1; i++) {
+    const c = s("circle", { cx: pts[i].x, cy: pts[i].y, r: 5, class: "handle" });
+    c.addEventListener("pointerdown", e => {
+      e.stopPropagation();
+      dragWaypoint(id, i - 1);
+    });
+    c.addEventListener("dblclick", e => {
+      e.stopPropagation();
+      removeWaypoint(id, i - 1);
+    });
+    handles.append(c);
+  }
+}
+
+function dragWaypoint(id: string, index: number) {
+  const move = (ev: PointerEvent) => {
+    view().lines[id][index] = toWorld(ev);
+    drawRefs();
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    save();
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
+function removeWaypoint(id: string, index: number) {
+  view().lines[id].splice(index, 1);
+  if (!view().lines[id].length) {
+    delete view().lines[id];
+  }
+  save();
+  drawRefs();
+}
+
+/** Reset the manual bends of the selected line. */
+function resetLine(id: string) {
+  if (view().lines[id]) {
+    delete view().lines[id];
+    save();
+    drawRefs();
+  }
 }
 
 // --- Selection --------------------------------------------------------------
@@ -432,6 +560,7 @@ function applySelection() {
   for (const [k, el] of tableEls) {
     el.classList.toggle("hot", hotTables.has(k));
   }
+  drawHandles();
 }
 
 // --- Table selection ----------------------------------------------------------
@@ -511,6 +640,10 @@ search.addEventListener("keydown", e => {
   }
 });
 window.addEventListener("keydown", e => {
+  if ((e.key === "Delete" || e.key === "Backspace") && selectedRef && !(e.target instanceof HTMLInputElement)) {
+    e.preventDefault();
+    resetLine(selectedRef);
+  }
   if ((e.metaKey || e.ctrlKey) && e.key === "f") {
     e.preventDefault();
     setSide(true);

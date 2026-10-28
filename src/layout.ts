@@ -13,7 +13,8 @@ export interface ViewState {
   tables: Record<string, { x: number; y: number; hidden?: boolean; pinned?: boolean }>;
   /** Manual waypoints per ref id; deleting an entry resets that line. */
   lines: Record<string, { x: number; y: number }[]>;
-  notes: { id: string; x: number; y: number; w: number; h: number; text: string }[];
+  /** Positions of native `Note` blocks, keyed by note name. */
+  notes: Record<string, { x: number; y: number }>;
   containers: { id: string; x: number; y: number; w: number; h: number; title: string }[];
 }
 
@@ -26,7 +27,7 @@ export const emptyLayout = (): LayoutFile => ({
       camera: { x: 0, y: 0, zoom: 1 },
       tables: {},
       lines: {},
-      notes: [],
+      notes: {},
       containers: []
     }
   }

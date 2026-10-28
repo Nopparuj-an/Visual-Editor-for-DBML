@@ -42,9 +42,17 @@ export interface RefModel {
   range: SourceRange;
 }
 
+/** A floating `Note name { ... }` block (sticky note). */
+export interface NoteModel {
+  name: string;
+  content: string;
+  range: SourceRange;
+}
+
 export interface SchemaModel {
   tables: TableModel[];
   refs: RefModel[];
+  notes: NoteModel[];
 }
 
 const tableId = (schema: string | null | undefined, name: string) =>
@@ -97,5 +105,22 @@ export function parseDbml(source: string): SchemaModel {
       });
     }
   }
-  return { tables, refs };
+  const notes: NoteModel[] = (db.notes ?? []).map((n: any) => ({
+    name: n.name,
+    content: n.content ?? "",
+    range: rangeOf(n.token)
+  }));
+  return { tables, refs, notes };
+}
+
+/** The DBML compiler throws an object with `diags` rather than a normal Error message. */
+export function describeError(e: any): string {
+  const diags: any[] | undefined = e?.diags;
+  if (diags?.length) {
+    return diags
+      .slice(0, 5)
+      .map(d => `Line ${d.location?.start?.line ?? "?"}: ${d.message}`)
+      .join("\n");
+  }
+  return String(e?.message ?? e);
 }

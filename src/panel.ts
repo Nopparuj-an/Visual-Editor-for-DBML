@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { LayoutFile, readLayout, writeLayout } from "./layout";
 import type { ToExtension, ToWebview } from "./messages";
-import { parseDbml } from "./model";
+import { describeError, parseDbml } from "./model";
 
 export class EditorPanel {
   private static current: EditorPanel | undefined;
@@ -52,11 +52,13 @@ export class EditorPanel {
       case "saveLayout":
         return writeLayout(this.doc.uri, m.layout);
       case "reveal": {
-        const pos = new vscode.Position(m.line, 0);
-        await vscode.window.showTextDocument(this.doc, {
+        // Put the cursor at the end of the line, not the start.
+        const end = this.doc.lineAt(Math.min(m.line, this.doc.lineCount - 1)).range.end;
+        const editor = await vscode.window.showTextDocument(this.doc, {
           viewColumn: vscode.ViewColumn.One,
-          selection: new vscode.Range(pos, pos)
+          selection: new vscode.Range(end, end)
         });
+        editor.revealRange(new vscode.Range(end, end), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
       }
     }
   }
@@ -66,7 +68,7 @@ export class EditorPanel {
     try {
       msg = { type: "state", schema: parseDbml(this.doc.getText()), layout };
     } catch (e: any) {
-      msg = { type: "state", schema: null, error: String(e?.message ?? e), layout };
+      msg = { type: "state", schema: null, error: describeError(e), layout };
     }
     this.panel.webview.postMessage(msg);
   }
