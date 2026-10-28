@@ -17,12 +17,16 @@ export interface Req {
   manual?: number[];
 }
 
-const CLEAR = 8;
-const MIN_STUB = 10;
+/** Space kept between a line and a table: wide on the sides so the first turn clears the column text. */
+const CLEAR_X = 24;
+const CLEAR_Y = 8;
+const MIN_STUB = 22;
 const BEND = 24;
 const LANE = 10;
 const OVERLAP = 3;
-const CROSS = 14;
+/** Flat cost for sharing any stretch of another line, so even a short overlap is worth a detour. */
+const OVERLAP_FIXED = 80;
+const CROSS = 20;
 
 export function routePoints(a: Pt, b: Pt, channels: number[]): Pt[] {
   const pts: Pt[] = [a];
@@ -61,7 +65,7 @@ function segments(pts: Pt[]): Seg[] {
 }
 
 /** Candidate coordinates: every obstacle edge, plus lanes through the gaps between edges and beyond the outermost ones. */
-function axisCandidates(edges: number[]): number[] {
+function axisCandidates(edges: number[], lows: number[], highs: number[]): number[] {
   const e = [...new Set(edges)].sort((p, q) => p - q);
   const out = new Set<number>(e);
   for (let i = 0; i < e.length - 1; i++) {
@@ -76,6 +80,11 @@ function axisCandidates(edges: number[]): number[] {
       out.add(mid + k * LANE);
     }
   }
+  // Lanes hugging each obstacle, so parallel lines can sit side by side right next to a table.
+  for (let k = 1; k <= 5; k++) {
+    lows.forEach(v => out.add(v - k * LANE));
+    highs.forEach(v => out.add(v + k * LANE));
+  }
   for (let k = 1; k <= 4; k++) {
     out.add(e[0] - k * 18);
     out.add(e[e.length - 1] + k * 18);
@@ -84,9 +93,9 @@ function axisCandidates(edges: number[]): number[] {
 }
 
 export function routeAll(reqs: Req[], obstacles: Rect[]): Map<string, number[]> {
-  const obs = obstacles.map(o => ({ x0: o.x - CLEAR, x1: o.x + o.w + CLEAR, y0: o.y - CLEAR, y1: o.y + o.h + CLEAR }));
-  const xs = axisCandidates(obs.flatMap(o => [o.x0, o.x1]));
-  const ys = axisCandidates(obs.flatMap(o => [o.y0, o.y1]));
+  const obs = obstacles.map(o => ({ x0: o.x - CLEAR_X, x1: o.x + o.w + CLEAR_X, y0: o.y - CLEAR_Y, y1: o.y + o.h + CLEAR_Y }));
+  const xs = axisCandidates(obs.flatMap(o => [o.x0, o.x1]), obs.map(o => o.x0), obs.map(o => o.x1));
+  const ys = axisCandidates(obs.flatMap(o => [o.y0, o.y1]), obs.map(o => o.y0), obs.map(o => o.y1));
   const result = new Map<string, number[]>();
   const taken: Seg[] = [];
 
@@ -110,7 +119,7 @@ export function routeAll(reqs: Req[], obstacles: Rect[]): Map<string, number[]> 
         if (s.h === t.h) {
           const overlap = Math.min(s.hi, t.hi) - Math.max(s.lo, t.lo);
           if (Math.abs(s.c - t.c) < 4 && overlap > 0 && !(s.stub && t.stub)) {
-            p += OVERLAP * overlap;
+            p += OVERLAP_FIXED + OVERLAP * overlap;
           }
         } else if (t.c > s.lo && t.c < s.hi && s.c > t.lo && s.c < t.hi) {
           p += CROSS;

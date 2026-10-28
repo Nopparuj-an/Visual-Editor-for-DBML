@@ -59,7 +59,7 @@ async function layered(nodes: ArrangeNode[], edges: ArrangeEdge[], dir: Exclude<
       "elk.algorithm": "layered",
       "elk.direction": dir,
       "elk.spacing.nodeNode": "50",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "150",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "200",
       "elk.spacing.componentComponent": "80",
       "elk.separateConnectedComponents": "true"
     },

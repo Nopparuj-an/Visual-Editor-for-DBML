@@ -585,7 +585,7 @@ function scheduleRefs() {
 }
 
 function cardinality(at: Anchor, label: string) {
-  const t = s("text", { x: at.x + at.dir * 10, y: at.y - 5, class: "card", "text-anchor": at.dir === 1 ? "start" : "end" });
+  const t = s("text", { x: at.x + at.dir * 7, y: at.y - 4, class: "card", "text-anchor": at.dir === 1 ? "start" : "end" });
   t.textContent = label;
   return t;
 }
@@ -943,11 +943,12 @@ async function runArrange(dir: Direction) {
 const menu = h("div");
 menu.id = "menu";
 menu.hidden = true;
+// Names say where the parent (referenced) table ends up; ELK flows along the arrows, which point at parents.
 for (const [label, dir] of [
-  ["Left → right", "RIGHT"],
-  ["Right → left", "LEFT"],
-  ["Top → bottom", "DOWN"],
-  ["Bottom → top", "UP"],
+  ["Parents on left", "LEFT"],
+  ["Parents on right", "RIGHT"],
+  ["Parents on top", "UP"],
+  ["Parents on bottom", "DOWN"],
   ["Grid", "GRID"]
 ] as const) {
   const b = h("button", undefined, label);

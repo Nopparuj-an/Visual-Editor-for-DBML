@@ -9,7 +9,7 @@ describe("arrange", () => {
   const nodes = [node("child"), node("parent"), node("grand"), node("lonely")];
   const edges = [{ from: "child", to: "parent" }, { from: "parent", to: "grand" }];
 
-  it("lays out left to right following the arrows", async () => {
+  it("puts parents on the right when flowing right along the arrows", async () => {
     const p = await arrange(nodes, edges, "RIGHT");
     expect(p.get("child")!.x).toBeLessThan(p.get("parent")!.x);
     expect(p.get("parent")!.x).toBeLessThan(p.get("grand")!.x);

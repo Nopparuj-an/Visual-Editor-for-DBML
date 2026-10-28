@@ -53,6 +53,22 @@ describe("routeAll", () => {
     expect(new Set(xs).size).toBe(3);
   });
 
+  it("spreads lines that loop out the same side instead of stacking them", () => {
+    const rects = [tbl(0, 300, 200), tbl(0, 0, 100)];
+    const reqs: Req[] = [0, 1].map(i => ({
+      id: `r${i}`,
+      a: { x: W, y: 330 + i * 22, dir: 1 },
+      b: { x: W, y: 30, dir: 1 },
+      srcObs: 0,
+      dstObs: 1
+    }));
+    const out = routeAll(reqs, rects);
+    expect(out.get("r0")![0]).not.toBe(out.get("r1")![0]);
+    for (const r of reqs) {
+      expect(out.get(r.id)![0]).toBeGreaterThanOrEqual(W + 22);
+    }
+  });
+
   it("keeps manual routes untouched", () => {
     const rects = [tbl(0, 0), tbl(400, 0)];
     const out = routeAll([{ id: "r", a: { x: W, y: 30, dir: 1 }, b: { x: 400, y: 30, dir: -1 }, srcObs: 0, dstObs: 1, manual: [333] }], rects);
