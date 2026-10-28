@@ -479,6 +479,8 @@ function dragTable(e: PointerEvent, id: string) {
   const up = () => {
     target.removeEventListener("pointermove", move);
     target.removeEventListener("pointerup", up);
+    cancelAnimationFrame(refFrame);
+    drawRefs();
     save();
   };
   target.addEventListener("pointermove", move);
@@ -524,7 +526,8 @@ function roundedPath(points: Pt[], radius = 6) {
   return `${d} L${p[p.length - 1].x},${p[p.length - 1].y}`;
 }
 
-function drawRefs() {
+/** `settled` runs the slower conflict-resolving passes; skip it while something is being dragged. */
+function drawRefs(settled = true) {
   linesLayer.replaceChildren();
   routes = new Map();
   const shown = items();
@@ -556,7 +559,7 @@ function drawRefs() {
       req: { id: r.id, a, b, srcObs: index.get(src.table)!, dstObs: index.get(dst.table)!, manual: manual?.length ? manual : undefined }
     });
   }
-  const channels = routeAll(pending.map(p => p.req), shown);
+  const channels = routeAll(pending.map(p => p.req), shown, settled ? 3 : 0);
   for (const { ref: r, src, dst, req } of pending) {
     const { a, b } = req;
     const ch = channels.get(r.id)!;
@@ -581,7 +584,7 @@ let refFrame = 0;
 /** Redraw the lines at most once per frame while something is being dragged. */
 function scheduleRefs() {
   cancelAnimationFrame(refFrame);
-  refFrame = requestAnimationFrame(drawRefs);
+  refFrame = requestAnimationFrame(() => drawRefs(false));
 }
 
 function cardinality(at: Anchor, label: string) {
@@ -643,7 +646,7 @@ function trackSegment(id: string, index: number) {
       v = route.b.dir > 0 ? Math.max(v, route.b.x + 10) : Math.min(v, route.b.x - 10);
     }
     ch[index] = v;
-    drawRefs();
+    drawRefs(false);
   });
   drawRefs();
 }
@@ -1079,6 +1082,8 @@ function trackPointer(move: (e: PointerEvent) => void) {
   const up = () => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
+    cancelAnimationFrame(refFrame);
+    drawRefs();
     save();
   };
   window.addEventListener("pointermove", move);

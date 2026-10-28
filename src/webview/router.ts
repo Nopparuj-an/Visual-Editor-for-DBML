@@ -26,7 +26,7 @@ const LANE = 10;
 const OVERLAP = 3;
 /** Flat cost for sharing any stretch of another line, so even a short overlap is worth a detour. */
 const OVERLAP_FIXED = 80;
-const CROSS = 20;
+const CROSS = 40;
 
 export function routePoints(a: Pt, b: Pt, channels: number[]): Pt[] {
   const pts: Pt[] = [a];
@@ -43,7 +43,8 @@ export function routePoints(a: Pt, b: Pt, channels: number[]): Pt[] {
   return pts;
 }
 
-interface Seg { h: boolean; c: number; lo: number; hi: number; stub: boolean }
+/** `port` is set on the two end runs: lines that share a port may share that run. */
+interface Seg { h: boolean; c: number; lo: number; hi: number; port?: string }
 
 function segments(pts: Pt[]): Seg[] {
   const out: Seg[] = [];
@@ -58,7 +59,7 @@ function segments(pts: Pt[]): Seg[] {
       c: h ? p.y : p.x,
       lo: h ? Math.min(p.x, q.x) : Math.min(p.y, q.y),
       hi: h ? Math.max(p.x, q.x) : Math.max(p.y, q.y),
-      stub: i === 0 || i === pts.length - 2
+      port: i === 0 ? `${pts[0].x},${pts[0].y}` : i === pts.length - 2 ? `${pts[i + 1].x},${pts[i + 1].y}` : undefined
     });
   }
   return out;
@@ -92,12 +93,17 @@ function axisCandidates(edges: number[], lows: number[], highs: number[]): numbe
   return [...out].sort((p, q) => p - q);
 }
 
-export function routeAll(reqs: Req[], obstacles: Rect[]): Map<string, number[]> {
+/**
+ * Route every line. `passes` is how many times conflicting lines are ripped up and re-routed
+ * afterwards: use 0 while dragging for speed, and the default when the layout settles.
+ */
+export function routeAll(reqs: Req[], obstacles: Rect[], passes = 3): Map<string, number[]> {
   const obs = obstacles.map(o => ({ x0: o.x - CLEAR_X, x1: o.x + o.w + CLEAR_X, y0: o.y - CLEAR_Y, y1: o.y + o.h + CLEAR_Y }));
   const xs = axisCandidates(obs.flatMap(o => [o.x0, o.x1]), obs.map(o => o.x0), obs.map(o => o.x1));
   const ys = axisCandidates(obs.flatMap(o => [o.y0, o.y1]), obs.map(o => o.y0), obs.map(o => o.y1));
   const result = new Map<string, number[]>();
-  const taken: Seg[] = [];
+  /** Segments of every routed line, so a line can be scored against all the others. */
+  const taken = new Map<string, Seg[]>();
 
   const blocked = (h: boolean, c: number, lo: number, hi: number, skip: number) => {
     for (let i = 0; i < obs.length; i++) {
@@ -112,17 +118,24 @@ export function routeAll(reqs: Req[], obstacles: Rect[]): Map<string, number[]> 
     return false;
   };
 
-  const penalty = (segs: Seg[]) => {
+  const penalty = (segs: Seg[], owner: string) => {
     let p = 0;
     for (const s of segs) {
-      for (const t of taken) {
-        if (s.h === t.h) {
-          const overlap = Math.min(s.hi, t.hi) - Math.max(s.lo, t.lo);
-          if (Math.abs(s.c - t.c) < 4 && overlap > 0 && !(s.stub && t.stub)) {
-            p += OVERLAP_FIXED + OVERLAP * overlap;
+      for (const [id, others] of taken) {
+        if (id === owner) {
+          continue;
+        }
+        for (const t of others) {
+          if (s.h === t.h) {
+            const overlap = Math.min(s.hi, t.hi) - Math.max(s.lo, t.lo);
+            const shared = s.port !== undefined && s.port === t.port;
+            // Segments that merely meet end to end on the same line also read as one line.
+            if (Math.abs(s.c - t.c) < 4 && overlap > -6 && !shared) {
+              p += OVERLAP_FIXED + OVERLAP * Math.max(0, overlap);
+            }
+          } else if (t.c > s.lo && t.c < s.hi && s.c > t.lo && s.c < t.hi) {
+            p += CROSS;
           }
-        } else if (t.c > s.lo && t.c < s.hi && s.c > t.lo && s.c < t.hi) {
-          p += CROSS;
         }
       }
     }
@@ -140,7 +153,7 @@ export function routeAll(reqs: Req[], obstacles: Rect[]): Map<string, number[]> 
       if (!valid(c.ch)) {
         continue;
       }
-      const total = c.cost + penalty(segments(routePoints(r.a, r.b, c.ch)));
+      const total = c.cost + penalty(segments(routePoints(r.a, r.b, c.ch)), r.id);
       if (!best || total < best.cost) {
         best = { ch: c.ch, cost: total };
       }
@@ -158,10 +171,10 @@ export function routeAll(reqs: Req[], obstacles: Rect[]): Map<string, number[]> 
 
   for (const r of manual) {
     result.set(r.id, r.manual!);
-    taken.push(...segments(routePoints(r.a, r.b, r.manual!)));
+    taken.set(r.id, segments(routePoints(r.a, r.b, r.manual!)));
   }
 
-  for (const r of auto) {
+  const place = (r: Req) => {
     const { a, b } = r;
     const okA = (x: number) => a.dir * (x - a.x) >= MIN_STUB;
     const okB = (x: number) => b.dir * (x - b.x) >= MIN_STUB;
@@ -201,7 +214,25 @@ export function routeAll(reqs: Req[], obstacles: Rect[]): Map<string, number[]> 
 
     ch ??= [a.dir === b.dir ? (a.dir > 0 ? Math.max(a.x, b.x) + 27 : Math.min(a.x, b.x) - 27) : (a.x + b.x) / 2];
     result.set(r.id, ch);
-    taken.push(...segments(routePoints(a, b, ch)));
+    taken.set(r.id, segments(routePoints(a, b, ch)));
+  };
+
+  // Short lines first; they claim the lanes closest to the tables.
+  auto.forEach(place);
+  // Greedy order can leave lines crossing or stacked. Rip up every line that still conflicts with another and route it again.
+  for (let pass = 0; pass < passes; pass++) {
+    let changed = false;
+    for (const r of auto) {
+      if (penalty(taken.get(r.id)!, r.id) > 0) {
+        const before = result.get(r.id)!.join();
+        taken.delete(r.id);
+        place(r);
+        changed ||= result.get(r.id)!.join() !== before;
+      }
+    }
+    if (!changed) {
+      break;
+    }
   }
   return result;
 }

@@ -69,6 +69,33 @@ describe("routeAll", () => {
     }
   });
 
+  it("nests lines so they do not cross when one jogs and the other goes far", () => {
+    const rects = [tbl(0, 300, 200), tbl(400, 300, 100), tbl(400, 0, 100)];
+    const reqs: Req[] = [
+      { id: "far", a: { x: W, y: 330, dir: 1 }, b: { x: 400, y: 30, dir: -1 }, srcObs: 0, dstObs: 2 },
+      { id: "near", a: { x: W, y: 352, dir: 1 }, b: { x: 400, y: 324, dir: -1 }, srcObs: 0, dstObs: 1 }
+    ];
+    const out = routeAll(reqs, rects);
+    const crossing = (p: { x: number; y: number }[], q: { x: number; y: number }[]) => {
+      for (let i = 0; i < p.length - 1; i++) {
+        for (let j = 0; j < q.length - 1; j++) {
+          const [a0, a1, b0, b1] = [p[i], p[i + 1], q[j], q[j + 1]];
+          const aH = a0.y === a1.y, bH = b0.y === b1.y;
+          if (aH === bH) {
+            continue;
+          }
+          const [h0, h1, v0, v1] = aH ? [a0, a1, b0, b1] : [b0, b1, a0, a1];
+          if (v0.x > Math.min(h0.x, h1.x) && v0.x < Math.max(h0.x, h1.x) && h0.y > Math.min(v0.y, v1.y) && h0.y < Math.max(v0.y, v1.y)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    const [f, n] = reqs.map(r => routePoints(r.a, r.b, out.get(r.id)!));
+    expect(crossing(f, n)).toBe(false);
+  });
+
   it("keeps manual routes untouched", () => {
     const rects = [tbl(0, 0), tbl(400, 0)];
     const out = routeAll([{ id: "r", a: { x: W, y: 30, dir: 1 }, b: { x: 400, y: 30, dir: -1 }, srcObs: 0, dstObs: 1, manual: [333] }], rects);
@@ -96,9 +123,12 @@ describe("routeAll", () => {
       });
     }
     const t = performance.now();
+    routeAll(reqs, rects, 0);
+    const fast = performance.now() - t;
     routeAll(reqs, rects);
-    const ms = performance.now() - t;
-    console.log(`routeAll: ${ms.toFixed(0)}ms`);
-    expect(ms).toBeLessThan(1500);
+    const full = performance.now() - t - fast;
+    console.log(`routeAll: fast ${fast.toFixed(0)}ms, full ${full.toFixed(0)}ms`);
+    expect(fast).toBeLessThan(150);
+    expect(full).toBeLessThan(1500);
   });
 });
