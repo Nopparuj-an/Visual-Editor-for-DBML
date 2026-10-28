@@ -1,4 +1,5 @@
 import type { LayoutFile, ViewState } from "../layout";
+import type { ColumnModel } from "../model";
 import type { RefModel, SchemaModel, TableModel } from "../model";
 import type { ToExtension, ToWebview } from "../messages";
 import { css } from "./styles";
@@ -14,6 +15,7 @@ const PAD_B = 2;
 const BORDER = 1;
 const STUB = 18;
 const NOTE_H = 20;
+const STICKY_W = 200;
 const GAP_X = 120;
 const GAP_Y = 40;
 const MIN_ZOOM = 0.1;
@@ -48,6 +50,30 @@ let selectedRef: string | null = null;
 let selectedCol: { table: string; column: string } | null = null;
 
 const view = (): ViewState => layout!.views[layout!.activeView];
+
+const isNote = (id: string) => id.startsWith("note:");
+const posOf = (id: string) => (isNote(id) ? view().notes[id.slice(5)] : view().tables[id]);
+
+interface Item { id: string; x: number; y: number; w: number; h: number }
+
+/** Everything draggable on the canvas that is currently visible: tables and sticky notes. */
+function items(): Item[] {
+  const out: Item[] = [];
+  for (const t of schema?.tables ?? []) {
+    const p = view().tables[t.id];
+    if (p && !p.hidden) {
+      out.push({ id: t.id, x: p.x, y: p.y, w: TABLE_W, h: tableHeight(t) });
+    }
+  }
+  for (const n of schema?.notes ?? []) {
+    const id = `note:${n.name}`;
+    const p = view().notes[n.name], el = tableEls.get(id);
+    if (p && el) {
+      out.push({ id, x: p.x, y: p.y, w: el.offsetWidth, h: el.offsetHeight });
+    }
+  }
+  return out;
+}
 
 // --- DOM scaffold -----------------------------------------------------------
 document.head.appendChild(document.createElement("style")).textContent = css;
@@ -89,6 +115,18 @@ search.id = "search";
 search.placeholder = "Search…";
 const viewsBox = h("div", "section");
 const tablesBox = h("div", "section");
+for (const [label, title, fn] of [
+  ["+ Group", "Add a container to group tables", () => addContainer()],
+  ["+ Note", "Add a sticky note (inserts a Note block in the DBML)", () => {
+    pendingNote = true;
+    api.postMessage({ type: "addNote" });
+  }]
+] as const) {
+  const b = h("button", undefined, label);
+  b.title = title;
+  b.onclick = fn;
+  bar.prepend(b);
+}
 side.append(search, viewsBox, tablesBox);
 const marquee = h("div");
 marquee.id = "marquee";
@@ -131,21 +169,15 @@ function zoomAt(px: number, py: number, factor: number) {
 }
 
 function fit() {
-  if (!schema?.tables.length) {
+  const all = items();
+  for (const c of view().containers) {
+    all.push({ id: c.id, x: c.x, y: c.y, w: c.w, h: c.h });
+  }
+  if (!all.length) {
     return;
   }
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  const shown = schema.tables.filter(t => !view().tables[t.id].hidden);
-  if (!shown.length) {
-    return;
-  }
-  for (const t of shown) {
-    const p = view().tables[t.id];
-    x0 = Math.min(x0, p.x);
-    y0 = Math.min(y0, p.y);
-    x1 = Math.max(x1, p.x + TABLE_W);
-    y1 = Math.max(y1, p.y + tableHeight(t));
-  }
+  const x0 = Math.min(...all.map(i => i.x)), y0 = Math.min(...all.map(i => i.y));
+  const x1 = Math.max(...all.map(i => i.x + i.w)), y1 = Math.max(...all.map(i => i.y + i.h));
   const pad = 40;
   const zoom = Math.min(1, (viewport.clientWidth - pad * 2) / (x1 - x0), (viewport.clientHeight - pad * 2) / (y1 - y0));
   const c = view().camera;
@@ -211,10 +243,7 @@ function startMarquee(e: PointerEvent) {
     marquee.style.cssText = `left:${l}px;top:${t}px;width:${w}px;height:${hh}px;`;
     const c = view().camera;
     const wl = (l - c.x) / c.zoom, wt = (t - c.y) / c.zoom, wr = (l + w - c.x) / c.zoom, wb = (t + hh - c.y) / c.zoom;
-    setSelected(schema!.tables.filter(tb => {
-      const p = view().tables[tb.id];
-      return !p.hidden && p.x < wr && p.x + TABLE_W > wl && p.y < wb && p.y + tableHeight(tb) > wt;
-    }).map(tb => tb.id));
+    setSelected(items().filter(i => i.x < wr && i.x + i.w > wl && i.y < wb && i.y + i.h > wt).map(i => i.id));
   };
   const up = () => {
     marquee.hidden = true;
@@ -247,6 +276,29 @@ function placeNewTables() {
   save();
 }
 
+let pendingNote = false;
+
+function placeNewNotes() {
+  const v = view();
+  const fresh = schema!.notes.filter(n => !v.notes[n.name]);
+  if (!fresh.length) {
+    return;
+  }
+  const c = v.camera;
+  let x = (viewport.clientWidth / 2 - c.x) / c.zoom - STICKY_W / 2;
+  let y = (viewport.clientHeight / 2 - c.y) / c.zoom - 60;
+  if (!pendingNote) {
+    x = 0;
+    y = Math.max(0, ...schema!.tables.map(t => v.tables[t.id].y + tableHeight(t))) + GAP_Y;
+  }
+  pendingNote = false;
+  for (const n of fresh) {
+    v.notes[n.name] = { x, y };
+    x += STICKY_W + 40;
+  }
+  save();
+}
+
 // --- Rendering --------------------------------------------------------------
 const tableEls = new Map<string, HTMLElement>();
 const colEls = new Map<string, HTMLElement>();
@@ -262,6 +314,7 @@ function render() {
     return;
   }
   placeNewTables();
+  placeNewNotes();
   const fks = new Set<string>();
   for (const r of schema.refs) {
     for (const e of [r.from, r.to]) {
@@ -271,7 +324,7 @@ function render() {
     }
   }
   for (const id of [...selected]) {
-    if (!schema.tables.some(t => t.id === id)) {
+    if (!schema.tables.some(t => t.id === id) && !schema.notes.some(n => `note:${n.name}` === id)) {
       selected.delete(id);
     }
   }
@@ -292,7 +345,7 @@ function render() {
     head.append(t.name);
     head.title = t.note ?? "";
     head.ondblclick = () => api.postMessage({ type: "reveal", line: t.range.startLine });
-    head.onpointerdown = e => dragTable(e, t);
+    head.onpointerdown = e => dragTable(e, t.id);
     el.append(head);
     if (t.note) {
       const note = h("div", "table-note", t.note.replace(/\s+/g, " "));
@@ -320,13 +373,28 @@ function render() {
         row.append(n);
       }
       row.ondblclick = () => api.postMessage({ type: "reveal", line: c.range.startLine });
-      row.onclick = () => select(null, { table: t.id, column: c.name });
+      row.onclick = () => !justDragged && select(null, { table: t.id, column: c.name });
+      row.dataset.table = t.id;
+      row.dataset.col = c.name;
+      row.onpointerdown = e => startColDrag(e, t, c);
       colEls.set(`${t.id}.${c.name}`, row);
       el.append(row);
     }
     tableEls.set(t.id, el);
     world.append(el);
   }
+  for (const n of schema.notes) {
+    const el = h("div", "sticky");
+    const p = view().notes[n.name];
+    el.style.cssText = `left:${p.x}px;top:${p.y}px;width:${STICKY_W}px;`;
+    el.append(h("div", "sticky-title", n.name), h("div", "sticky-body", n.content));
+    el.title = "Double-click to edit in code";
+    el.ondblclick = () => api.postMessage({ type: "reveal", line: n.range.startLine });
+    el.onpointerdown = e => dragTable(e, `note:${n.name}`);
+    tableEls.set(`note:${n.name}`, el);
+    world.append(el);
+  }
+  renderContainers();
   world.append(overlay);
   drawRefs();
   applyCamera();
@@ -335,21 +403,21 @@ function render() {
   renderSide();
 }
 
-function dragTable(e: PointerEvent, t: TableModel) {
+function dragTable(e: PointerEvent, id: string) {
   if (e.button !== 0) {
     return;
   }
   if (e.shiftKey || e.metaKey || e.ctrlKey) {
-    selected.has(t.id) ? selected.delete(t.id) : selected.add(t.id);
+    selected.has(id) ? selected.delete(id) : selected.add(id);
     applyTableSel();
     return;
   }
-  if (!selected.has(t.id)) {
-    setSelected([t.id]);
+  if (!selected.has(id)) {
+    setSelected([id]);
   }
   const z = view().camera.zoom;
   const ox = e.clientX, oy = e.clientY;
-  const moving = [...selected].map(id => ({ id, p: view().tables[id], x: view().tables[id].x, y: view().tables[id].y }));
+  const moving = [...selected].map(i => ({ id: i, p: posOf(i), x: posOf(i).x, y: posOf(i).y }));
   const target = e.currentTarget as HTMLElement;
   target.setPointerCapture(e.pointerId);
   const move = (ev: PointerEvent) => {
@@ -526,6 +594,8 @@ function resetLine(id: string) {
 function select(ref: string | null, col: { table: string; column: string } | null) {
   selectedRef = ref;
   selectedCol = col;
+  selectedContainer = null;
+  applyContainerSel();
   applySelection();
 }
 
@@ -611,7 +681,7 @@ function applySearch() {
     }
   }
   for (const [id, el] of tableEls) {
-    el.classList.toggle("faded", !!query && !found.has(id));
+    el.classList.toggle("faded", !!query && !isNote(id) && !found.has(id));
   }
   for (const [k, el] of colEls) {
     // table ids may contain a dot (schema.table), so match on the known table prefix
@@ -640,9 +710,17 @@ search.addEventListener("keydown", e => {
   }
 });
 window.addEventListener("keydown", e => {
-  if ((e.key === "Delete" || e.key === "Backspace") && selectedRef && !(e.target instanceof HTMLInputElement)) {
-    e.preventDefault();
-    resetLine(selectedRef);
+  if ((e.key === "Delete" || e.key === "Backspace") && !(e.target instanceof HTMLInputElement)) {
+    if (selectedRef) {
+      e.preventDefault();
+      resetLine(selectedRef);
+    } else if (selectedContainer) {
+      e.preventDefault();
+      view().containers = view().containers.filter(c => c.id !== selectedContainer);
+      selectedContainer = null;
+      save();
+      renderContainers();
+    }
   }
   if ((e.metaKey || e.ctrlKey) && e.key === "f") {
     e.preventDefault();
@@ -765,6 +843,181 @@ function renderSide() {
   }
 }
 
+// --- Containers ---------------------------------------------------------------
+const containerEls: HTMLElement[] = [];
+let selectedContainer: string | null = null;
+
+function applyContainerSel() {
+  view().containers.forEach((c, i) => containerEls[i]?.classList.toggle("sel", c.id === selectedContainer));
+}
+
+function selectContainer(id: string | null) {
+  selectedContainer = id;
+  if (id) {
+    selectedRef = null;
+    selectedCol = null;
+    applySelection();
+  }
+  applyContainerSel();
+}
+
+function addContainer() {
+  const c = view().camera;
+  const w = 420, hh = 280;
+  const id = `c-${Date.now().toString(36)}`;
+  view().containers.push({
+    id,
+    title: "Group",
+    w,
+    h: hh,
+    x: (viewport.clientWidth / 2 - c.x) / c.zoom - w / 2,
+    y: (viewport.clientHeight / 2 - c.y) / c.zoom - hh / 2
+  });
+  save();
+  renderContainers();
+  selectContainer(id);
+}
+
+function renderContainers() {
+  containerEls.forEach(e => e.remove());
+  containerEls.length = 0;
+  for (const c of view().containers) {
+    const el = h("div", "container");
+    const place = () => (el.style.cssText = `left:${c.x}px;top:${c.y}px;width:${c.w}px;height:${c.h}px;`);
+    place();
+    const title = h("div", "c-title", c.title);
+    title.title = "Drag to move with its tables · double-click to rename · Del to delete";
+    title.ondblclick = () => {
+      const input = h("input");
+      input.value = c.title;
+      input.onblur = () => {
+        c.title = input.value.trim() || c.title;
+        save();
+        title.textContent = c.title;
+        input.replaceWith(title);
+      };
+      input.onkeydown = ev => ev.key === "Enter" && input.blur();
+      input.onpointerdown = ev => ev.stopPropagation();
+      title.replaceWith(input);
+      input.focus();
+      input.select();
+    };
+    title.onpointerdown = e => {
+      if (e.button !== 0) {
+        return;
+      }
+      e.stopPropagation();
+      selectContainer(c.id);
+      // Tables and notes whose centre is inside the container travel with it.
+      const inside = items().filter(i => i.x + i.w / 2 > c.x && i.x + i.w / 2 < c.x + c.w && i.y + i.h / 2 > c.y && i.y + i.h / 2 < c.y + c.h);
+      const start = inside.map(i => ({ id: i.id, p: posOf(i.id), x: i.x, y: i.y }));
+      const cx = c.x, cy = c.y, ox = e.clientX, oy = e.clientY, z = view().camera.zoom;
+      const move = (ev: PointerEvent) => {
+        const dx = (ev.clientX - ox) / z, dy = (ev.clientY - oy) / z;
+        c.x = cx + dx;
+        c.y = cy + dy;
+        place();
+        for (const m of start) {
+          m.p.x = m.x + dx;
+          m.p.y = m.y + dy;
+          const t = tableEls.get(m.id)!;
+          t.style.left = `${m.p.x}px`;
+          t.style.top = `${m.p.y}px`;
+        }
+        drawRefs();
+      };
+      trackPointer(move);
+    };
+    const grip = h("div", "c-resize");
+    grip.onpointerdown = e => {
+      e.stopPropagation();
+      const w0 = c.w, h0 = c.h, ox = e.clientX, oy = e.clientY, z = view().camera.zoom;
+      trackPointer(ev => {
+        c.w = Math.max(120, w0 + (ev.clientX - ox) / z);
+        c.h = Math.max(80, h0 + (ev.clientY - oy) / z);
+        place();
+      });
+    };
+    el.append(title, grip);
+    world.prepend(el);
+    containerEls.push(el);
+  }
+  applyContainerSel();
+}
+
+/** Run `move` for every pointer move until release, then persist the layout. */
+function trackPointer(move: (e: PointerEvent) => void) {
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    save();
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
+// --- Link / insert mode ---------------------------------------------------------
+let justDragged = false;
+let dropEl: HTMLElement | null = null;
+
+/** Drag a column onto another table's column to add a Ref, or onto a row's lower edge to add a new column + Ref below it. */
+function startColDrag(e: PointerEvent, t: TableModel, c: ColumnModel) {
+  if (e.button !== 0 || e.shiftKey || e.metaKey || e.ctrlKey) {
+    return;
+  }
+  const sx = e.clientX, sy = e.clientY;
+  let dragging = false;
+  let drop: { el: HTMLElement; mode: "link" | "insert" } | null = null;
+  const from = anchor(t.id, c.name, 1)!;
+  const ghost = s("path", { class: "link-ghost" });
+
+  const move = (ev: PointerEvent) => {
+    if (!dragging) {
+      if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) {
+        return;
+      }
+      dragging = true;
+      handles.append(ghost);
+    }
+    const w = toWorld(ev);
+    ghost.setAttribute("d", `M${from.x},${from.y} L${from.x + STUB},${from.y} L${w.x},${w.y}`);
+    dropEl?.classList.remove("drop-link", "drop-insert");
+    dropEl = null;
+    drop = null;
+    const row = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>(".col");
+    if (row && !(row.dataset.table === t.id && row.dataset.col === c.name)) {
+      const r = row.getBoundingClientRect();
+      const mode = (ev.clientY - r.top) / r.height > 0.7 ? "insert" : "link";
+      row.classList.add(mode === "link" ? "drop-link" : "drop-insert");
+      dropEl = row;
+      drop = { el: row, mode };
+    }
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    dropEl?.classList.remove("drop-link", "drop-insert");
+    dropEl = null;
+    ghost.remove();
+    if (!dragging) {
+      return;
+    }
+    justDragged = true;
+    setTimeout(() => (justDragged = false), 0);
+    if (drop) {
+      const parent = { table: t.id, column: c.name };
+      const child = { table: drop.el.dataset.table!, column: drop.el.dataset.col! };
+      api.postMessage(
+        drop.mode === "link"
+          ? { type: "addRef", parent, child }
+          : { type: "insertColumn", parent, child: { table: child.table, after: child.column } }
+      );
+    }
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
 // --- Messages ---------------------------------------------------------------
 window.addEventListener("message", e => {
   const m = e.data as ToWebview;
@@ -773,6 +1026,14 @@ window.addEventListener("message", e => {
   }
   const first = !layout;
   layout = m.layout ?? layout;
+  for (const v of Object.values(layout?.views ?? {})) {
+    v.tables ??= {};
+    v.lines ??= {};
+    v.containers ??= [];
+    if (!v.notes || Array.isArray(v.notes)) {
+      v.notes = {};
+    }
+  }
   if (m.schema) {
     schema = m.schema;
   } else {

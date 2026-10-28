@@ -26,6 +26,22 @@ marker path { fill: context-stroke; }
 .col.hot { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
 .col .name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .col .type { opacity: .6; }
+.sticky { position: absolute; z-index: 2; box-sizing: border-box; padding: 8px 10px; background: #f6e58d; color: #2d2a1c; border-radius: 3px;
+  box-shadow: 2px 3px 8px rgba(0,0,0,.35); cursor: move; max-height: 260px; overflow: hidden; }
+.sticky-title { font-weight: 700; font-size: 10px; text-transform: uppercase; opacity: .6; margin-bottom: 4px; }
+.sticky-body { white-space: pre-wrap; line-height: 1.4; }
+.sticky.sel { outline: 2px solid var(--vscode-focusBorder); outline-offset: 1px; }
+.container { position: absolute; z-index: 0; box-sizing: border-box; border: 2px dashed var(--vscode-editorLineNumber-foreground);
+  border-radius: 10px; background: color-mix(in srgb, var(--vscode-editor-foreground) 4%, transparent); pointer-events: none; }
+.container.sel { border-color: var(--vscode-focusBorder); }
+.c-title { pointer-events: auto; position: absolute; left: 10px; top: -14px; padding: 2px 10px; border-radius: 10px; cursor: move;
+  background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border)); font-weight: 600; }
+.container input { position: absolute; left: 10px; top: -14px; pointer-events: auto; font: inherit; }
+.c-resize { pointer-events: auto; position: absolute; right: -6px; bottom: -6px; width: 14px; height: 14px; cursor: nwse-resize; border-radius: 3px;
+  background: var(--vscode-editorLineNumber-foreground); opacity: .6; }
+.col.drop-link { outline: 2px solid var(--vscode-focusBorder); outline-offset: -2px; }
+.col.drop-insert { box-shadow: inset 0 -3px 0 var(--vscode-focusBorder); }
+.link-ghost { fill: none; stroke: var(--vscode-focusBorder); stroke-width: 2; stroke-dasharray: 5 4; }
 .table-note { height: 20px; line-height: 20px; padding: 0 10px; font-style: italic; opacity: .7; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border)); box-sizing: border-box; }
 #overlay { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; z-index: 3; }

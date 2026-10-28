@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { LayoutFile, readLayout, writeLayout } from "./layout";
 import type { ToExtension, ToWebview } from "./messages";
+import { LineInsert, planAddNote, planAddRef, planInsertColumn } from "./edits";
 import { describeError, parseDbml } from "./model";
 
 export class EditorPanel {
@@ -51,6 +52,12 @@ export class EditorPanel {
         return this.push(await readLayout(this.doc.uri));
       case "saveLayout":
         return writeLayout(this.doc.uri, m.layout);
+      case "addRef":
+        return this.edit(lines => planAddRef(lines, parseDbml(this.doc.getText()), m.parent, m.child));
+      case "insertColumn":
+        return this.edit(lines => planInsertColumn(lines, parseDbml(this.doc.getText()), m.parent, m.child));
+      case "addNote":
+        return this.edit(lines => [planAddNote(lines, parseDbml(this.doc.getText()))]);
       case "reveal": {
         // Put the cursor at the end of the line, not the start.
         const end = this.doc.lineAt(Math.min(m.line, this.doc.lineCount - 1)).range.end;
@@ -61,6 +68,27 @@ export class EditorPanel {
         editor.revealRange(new vscode.Range(end, end), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
       }
     }
+  }
+
+  /** Apply line insertions computed against the current text as one undoable edit. */
+  private async edit(plan: (lines: string[]) => LineInsert[]) {
+    let inserts: LineInsert[];
+    try {
+      inserts = plan(this.doc.getText().split(/\r?\n/));
+    } catch (e: any) {
+      vscode.window.showErrorMessage(`Cannot edit: ${describeError(e)}`);
+      return;
+    }
+    const we = new vscode.WorkspaceEdit();
+    for (const { line, text } of inserts) {
+      if (line >= this.doc.lineCount) {
+        const end = this.doc.lineAt(this.doc.lineCount - 1).range.end;
+        we.insert(this.doc.uri, end, (end.character > 0 ? "\n" : "") + text + "\n");
+      } else {
+        we.insert(this.doc.uri, new vscode.Position(line, 0), text + "\n");
+      }
+    }
+    await vscode.workspace.applyEdit(we);
   }
 
   private push(layout?: LayoutFile) {
