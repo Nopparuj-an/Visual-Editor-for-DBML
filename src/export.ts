@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-//@ts-ignore
 import { exporter } from "@dbml/core";
 import * as fs from "fs";
 import * as path from "path";
