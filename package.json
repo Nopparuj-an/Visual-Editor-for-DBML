@@ -63,13 +63,21 @@
 					"command": "dbmlVisualEditor.fromSql",
 					"when": "editorLangId == sql"
 				}
+			],
+			"editor/title": [
+				{
+					"command": "dbmlVisualEditor.open",
+					"when": "editorLangId == dbml",
+					"group": "navigation"
+				}
 			]
 		},
 		"commands": [
 			{
 				"command": "dbmlVisualEditor.open",
-				"title": "Open Visual Editor",
-				"category": "DBML"
+				"title": "Open Visual Editor to the Side",
+				"category": "DBML",
+				"icon": "$(open-preview)"
 			},
 			{
 				"command": "dbmlVisualEditor.toSql",

@@ -122,9 +122,17 @@ function fit() {
 
 viewport.addEventListener("wheel", e => {
   e.preventDefault();
-  // Pinch / ctrl+wheel zooms smoothly; a plain wheel zooms in steps.
-  const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015));
-  zoomAt(e.clientX, e.clientY, factor);
+  if (e.ctrlKey || e.metaKey) {
+    // Trackpad pinch arrives as ctrl+wheel; cmd/ctrl+wheel zooms with a mouse.
+    zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.01));
+  } else {
+    // Two-finger trackpad scroll pans.
+    const c = view().camera;
+    c.x -= e.deltaX;
+    c.y -= e.deltaY;
+    applyCamera();
+    save();
+  }
 }, { passive: false });
 
 viewport.addEventListener("pointerdown", e => {
