@@ -33,7 +33,7 @@ marker path { fill: context-stroke; }
 #bar button { background: transparent; color: inherit; border: 0; border-radius: 4px; min-width: 28px; height: 26px; cursor: pointer; font: inherit; }
 #bar button:hover { background: var(--vscode-toolbar-hoverBackground); }
 #bar span { align-self: center; min-width: 40px; text-align: center; opacity: .7; }
-#sideToggle { position: absolute; left: 8px; top: 8px; z-index: 2; width: 28px; height: 28px; border-radius: 4px; cursor: pointer;
+#sideToggle { position: absolute; left: 8px; top: 8px; z-index: 2; width: 34px; height: 34px; border-radius: 5px; cursor: pointer; font-size: 18px;
   background: var(--vscode-editorWidget-background); color: inherit; border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border)); font: inherit; }
 #sideToggle:hover { background: var(--vscode-toolbar-hoverBackground); }
 #sideToggle.open { background: transparent; border-color: transparent; }
@@ -42,7 +42,7 @@ marker path { fill: context-stroke; }
 #msg:empty { display: none; }
 #side { position: absolute; left: 0; top: 0; bottom: 0; width: 240px; box-sizing: border-box; overflow-y: auto;
   border-right: 1px solid var(--vscode-panel-border); background: var(--vscode-sideBar-background, var(--vscode-editor-background)); padding: 8px; }
-#search { padding-left: 36px !important; }
+#search { margin-top: 38px; }
 #side input { width: 100%; box-sizing: border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground);
   border: 1px solid var(--vscode-input-border, transparent); border-radius: 3px; padding: 4px 6px; font: inherit; user-select: text; }
 #side input:focus { outline: 1px solid var(--vscode-focusBorder); }
