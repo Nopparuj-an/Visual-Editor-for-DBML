@@ -11,8 +11,11 @@ export interface ViewState {
   name: string;
   camera: { x: number; y: number; zoom: number };
   tables: Record<string, { x: number; y: number; hidden?: boolean; pinned?: boolean }>;
-  /** Manual waypoints per ref id; deleting an entry resets that line. */
-  lines: Record<string, { x: number; y: number }[]>;
+  /**
+   * Manual route per ref id as alternating channel coordinates (x, y, x, ...; odd length).
+   * Deleting an entry resets that line to the automatic route.
+   */
+  lines: Record<string, number[]>;
   /** Positions of native `Note` blocks, keyed by note name. */
   notes: Record<string, { x: number; y: number }>;
   containers: { id: string; x: number; y: number; w: number; h: number; title: string }[];

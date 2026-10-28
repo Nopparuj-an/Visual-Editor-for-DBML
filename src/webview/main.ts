@@ -42,6 +42,38 @@ function s<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, s
 }
 
 const headHeight = (t: TableModel) => HEAD_H + (t.note ? NOTE_H : 0);
+// Native `title` tooltips are slow and unreliable in webviews, so use our own.
+const tipEl = h("div");
+tipEl.id = "tip";
+tipEl.hidden = true;
+document.body.append(tipEl);
+
+function tip(el: Element, text?: string) {
+  (el as HTMLElement).dataset.tip = text ?? "";
+  if (!text) {
+    delete (el as HTMLElement).dataset.tip;
+  }
+}
+
+function placeTip(e: MouseEvent) {
+  const x = Math.min(e.clientX + 12, window.innerWidth - tipEl.offsetWidth - 8);
+  const y = e.clientY + 18 + tipEl.offsetHeight > window.innerHeight ? e.clientY - tipEl.offsetHeight - 8 : e.clientY + 18;
+  tipEl.style.cssText = `left:${Math.max(4, x)}px;top:${Math.max(4, y)}px;`;
+}
+
+document.addEventListener("mouseover", e => {
+  const text = (e.target as Element).closest?.<HTMLElement>("[data-tip]")?.dataset.tip;
+  tipEl.hidden = !text;
+  if (text) {
+    tipEl.textContent = text;
+    placeTip(e);
+  }
+});
+document.addEventListener("mousemove", e => !tipEl.hidden && placeTip(e));
+for (const ev of ["pointerdown", "wheel", "keydown"]) {
+  document.addEventListener(ev, () => (tipEl.hidden = true), true);
+}
+
 const tableHeight = (t: TableModel) => headHeight(t) + t.columns.length * ROW_H + PAD_B + BORDER * 2;
 
 let schema: SchemaModel | null = null;
@@ -123,7 +155,7 @@ for (const [label, title, fn] of [
   }]
 ] as const) {
   const b = h("button", undefined, label);
-  b.title = title;
+  tip(b, title);
   b.onclick = fn;
   bar.prepend(b);
 }
@@ -133,7 +165,7 @@ marquee.id = "marquee";
 marquee.hidden = true;
 const sideToggle = h("button", undefined, "☰");
 sideToggle.id = "sideToggle";
-sideToggle.title = "Toggle side panel";
+tip(sideToggle, "Toggle side panel");
 function setSide(open: boolean) {
   side.style.display = open ? "" : "none";
   viewport.style.left = open ? `${SIDE_W}px` : "0";
@@ -343,19 +375,20 @@ function render() {
       head.append(h("small", undefined, t.schema + "."));
     }
     head.append(t.name);
-    head.title = t.note ?? "";
+    tip(head, t.note);
     head.ondblclick = () => api.postMessage({ type: "reveal", line: t.range.startLine });
     head.onpointerdown = e => dragTable(e, t.id);
     el.append(head);
     if (t.note) {
-      const note = h("div", "table-note", t.note.replace(/\s+/g, " "));
-      note.title = t.note;
+      const lines = t.note.trim().split(/\r?\n/).filter(l => l.trim());
+      const note = h("div", "table-note", lines[0] + (lines.length > 1 ? " …" : ""));
+      tip(note, t.note);
       el.append(note);
     }
     for (const c of t.columns) {
       const row = h("div", "col");
       row.append(h("span", "name", c.name), h("span", "type", c.type));
-      for (const [on, label, tip] of [
+      for (const [on, label, hint] of [
         [c.pk, "PK", "Primary key"],
         [fks.has(`${t.id}.${c.name}`), "FK", "Foreign key"],
         [c.unique, "UQ", "Unique"],
@@ -363,13 +396,13 @@ function render() {
       ] as const) {
         if (on) {
           const b = h("span", "badge", label);
-          b.title = tip;
+          tip(b, hint);
           row.append(b);
         }
       }
       if (c.note) {
         const n = h("span", "badge note", "i");
-        n.title = c.note;
+        tip(n, c.note);
         row.append(n);
       }
       row.ondblclick = () => api.postMessage({ type: "reveal", line: c.range.startLine });
@@ -388,7 +421,7 @@ function render() {
     const p = view().notes[n.name];
     el.style.cssText = `left:${p.x}px;top:${p.y}px;width:${STICKY_W}px;`;
     el.append(h("div", "sticky-title", n.name), h("div", "sticky-body", n.content));
-    el.title = "Double-click to edit in code";
+    tip(el, "Double-click to edit in code");
     el.ondblclick = () => api.postMessage({ type: "reveal", line: n.range.startLine });
     el.onpointerdown = e => dragTable(e, `note:${n.name}`);
     tableEls.set(`note:${n.name}`, el);
@@ -452,25 +485,50 @@ function anchor(tableId: string, column: string, side: 1 | -1): Anchor | null {
 }
 
 type Pt = { x: number; y: number };
-/** Waypoints (plus the two stub ends) per ref id, as drawn; used for the bend handles. */
-let geometry = new Map<string, Pt[]>();
+
+/**
+ * A line is drawn as horizontal/vertical segments. Its shape is a list of "channels":
+ * x of a vertical run, then y of a horizontal run, then x, ... always ending on an x (odd length).
+ * `[mx]` is the plain H-V-H route; manual edits store a longer list in `view().lines`.
+ */
+interface Route { a: Anchor; b: Anchor; channels: number[]; manual: boolean; pts: Pt[] }
+let routes = new Map<string, Route>();
 
 const mid = (p: Pt, q: Pt): Pt => ({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 });
 
-/** Polyline through the points with rounded corners (quadratic curves at each waypoint). */
-function bentPath(a: Pt, b: Pt, p: Pt[]) {
-  let d = `M${a.x},${a.y} L${p[0].x},${p[0].y}`;
-  d += p.length > 2 ? ` L${mid(p[0], p[1]).x},${mid(p[0], p[1]).y}` : "";
+function routePoints(a: Pt, b: Pt, channels: number[]): Pt[] {
+  const pts: Pt[] = [a];
+  let x = a.x, y = a.y;
+  channels.forEach((c, i) => {
+    if (i % 2 === 0) {
+      x = c;
+    } else {
+      y = c;
+    }
+    pts.push({ x, y });
+  });
+  pts.push({ x, y: b.y }, b);
+  return pts;
+}
+
+/** Orthogonal polyline with small rounded corners. */
+function roundedPath(points: Pt[], radius = 6) {
+  const p = points.filter((q, i) => i === 0 || q.x !== points[i - 1].x || q.y !== points[i - 1].y);
+  let d = `M${p[0].x},${p[0].y}`;
   for (let i = 1; i < p.length - 1; i++) {
-    const m = mid(p[i], p[i + 1]);
-    d += ` Q${p[i].x},${p[i].y} ${m.x},${m.y}`;
+    const prev = p[i - 1], cur = p[i], next = p[i + 1];
+    const l1 = Math.hypot(cur.x - prev.x, cur.y - prev.y), l2 = Math.hypot(next.x - cur.x, next.y - cur.y);
+    const r = Math.min(radius, l1 / 2, l2 / 2);
+    const k1 = r / l1, k2 = r / l2;
+    d += ` L${cur.x + (prev.x - cur.x) * k1},${cur.y + (prev.y - cur.y) * k1}`;
+    d += ` Q${cur.x},${cur.y} ${cur.x + (next.x - cur.x) * k2},${cur.y + (next.y - cur.y) * k2}`;
   }
-  return `${d} L${p[p.length - 1].x},${p[p.length - 1].y} L${b.x},${b.y}`;
+  return `${d} L${p[p.length - 1].x},${p[p.length - 1].y}`;
 }
 
 function drawRefs() {
   linesLayer.replaceChildren();
-  geometry = new Map();
+  routes = new Map();
   for (const r of schema!.refs) {
     // Draw from the "many" side toward the "one" side so the arrowhead points at the referenced key.
     const [src, dst] = r.from.relation === "1" && r.to.relation === "*" ? [r.to, r.from] : [r.from, r.to];
@@ -489,14 +547,11 @@ function drawRefs() {
     if (!a || !b) {
       continue;
     }
-    // Straight stubs leave/enter each table horizontally, so the curve never bends right at the arrowhead.
-    const ax = a.x + a.dir * STUB, bx = b.x + b.dir * STUB;
-    const wps = view().lines[r.id] ?? [];
-    const reach = Math.max(40, Math.abs(bx - ax) / 2);
-    const d = wps.length
-      ? bentPath(a, b, [{ x: ax, y: a.y }, ...wps, { x: bx, y: b.y }])
-      : `M${a.x},${a.y} L${ax},${a.y} C${ax + a.dir * reach},${a.y} ${bx + b.dir * reach},${b.y} ${bx},${b.y} L${b.x},${b.y}`;
-    geometry.set(r.id, [{ x: ax, y: a.y }, ...wps, { x: bx, y: b.y }]);
+    const manual = view().lines[r.id];
+    const channels = manual?.length ? manual : [defaultChannel(a, b)];
+    const pts = routePoints(a, b, channels);
+    routes.set(r.id, { a, b, channels, manual: !!manual?.length, pts });
+    const d = roundedPath(pts);
     const g = s("g", { "data-ref": r.id });
     g.append(
       s("path", { d, class: "ref", "marker-end": "url(#arrow)" }),
@@ -511,77 +566,79 @@ function drawRefs() {
   applySelection();
 }
 
+/** x of the vertical run: halfway between the tables, or outside both when the line loops out the same side. */
+function defaultChannel(a: Anchor, b: Anchor) {
+  if (a.dir === b.dir) {
+    return a.dir > 0 ? Math.max(a.x, b.x) + STUB * 1.5 : Math.min(a.x, b.x) - STUB * 1.5;
+  }
+  return (a.x + b.x) / 2;
+}
+
 function cardinality(at: Anchor, label: string) {
   const t = s("text", { x: at.x + at.dir * 10, y: at.y - 5, class: "card", "text-anchor": at.dir === 1 ? "start" : "end" });
   t.textContent = label;
   return t;
 }
 
-// --- Line bending ----------------------------------------------------------
+// --- Line editing -----------------------------------------------------------
 function toWorld(ev: { clientX: number; clientY: number }): Pt {
   const r = viewport.getBoundingClientRect();
   const c = view().camera;
   return { x: (ev.clientX - r.left - c.x) / c.zoom, y: (ev.clientY - r.top - c.y) / c.zoom };
 }
 
+/** One handle per segment: drag a middle segment sideways, or pull the first/last run off the table to add a jog. */
 function drawHandles() {
   handles.replaceChildren();
-  const pts = selectedRef ? geometry.get(selectedRef) : undefined;
-  if (!selectedRef || !pts) {
+  const route = selectedRef ? routes.get(selectedRef) : undefined;
+  if (!selectedRef || !route) {
     return;
   }
   const id = selectedRef;
-  const wps = () => (view().lines[id] ??= []);
-  // Ghost handles halfway along each segment: drag one to add a bend there.
+  const { pts, channels, a, b } = route;
   for (let i = 0; i < pts.length - 1; i++) {
     const m = mid(pts[i], pts[i + 1]);
-    const c = s("circle", { cx: m.x, cy: m.y, r: 5, class: "handle ghost" });
+    const first = i === 0, last = i === pts.length - 2;
+    const c = s("circle", { cx: m.x, cy: m.y, r: 5, class: first || last ? "handle ghost" : "handle" });
     c.addEventListener("pointerdown", e => {
       e.stopPropagation();
-      wps().splice(i, 0, toWorld(e));
-      dragWaypoint(id, i);
-      drawRefs();
-    });
-    handles.append(c);
-  }
-  for (let i = 1; i < pts.length - 1; i++) {
-    const c = s("circle", { cx: pts[i].x, cy: pts[i].y, r: 5, class: "handle" });
-    c.addEventListener("pointerdown", e => {
-      e.stopPropagation();
-      dragWaypoint(id, i - 1);
-    });
-    c.addEventListener("dblclick", e => {
-      e.stopPropagation();
-      removeWaypoint(id, i - 1);
+      if (first) {
+        const w = toWorld(e);
+        view().lines[id] = [a.x + a.dir * STUB, w.y, ...channels];
+        trackSegment(id, 1);
+      } else if (last) {
+        const w = toWorld(e);
+        view().lines[id] = [...channels, w.y, b.x + b.dir * STUB];
+        trackSegment(id, channels.length);
+      } else {
+        view().lines[id] = [...channels];
+        trackSegment(id, i - 1);
+      }
     });
     handles.append(c);
   }
 }
 
-function dragWaypoint(id: string, index: number) {
-  const move = (ev: PointerEvent) => {
-    view().lines[id][index] = toWorld(ev);
+/** Drag channel `index` of a line: vertical runs (even) follow x, horizontal runs (odd) follow y. */
+function trackSegment(id: string, index: number) {
+  trackPointer(ev => {
+    const route = routes.get(id)!;
+    const ch = view().lines[id];
+    const w = toWorld(ev);
+    let v = index % 2 === 0 ? w.x : w.y;
+    if (index === 0) {
+      v = route.a.dir > 0 ? Math.max(v, route.a.x + 10) : Math.min(v, route.a.x - 10);
+    }
+    if (index === ch.length - 1) {
+      v = route.b.dir > 0 ? Math.max(v, route.b.x + 10) : Math.min(v, route.b.x - 10);
+    }
+    ch[index] = v;
     drawRefs();
-  };
-  const up = () => {
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", up);
-    save();
-  };
-  window.addEventListener("pointermove", move);
-  window.addEventListener("pointerup", up);
-}
-
-function removeWaypoint(id: string, index: number) {
-  view().lines[id].splice(index, 1);
-  if (!view().lines[id].length) {
-    delete view().lines[id];
-  }
-  save();
+  });
   drawRefs();
 }
 
-/** Reset the manual bends of the selected line. */
+/** Reset the manual route of a line. */
 function resetLine(id: string) {
   if (view().lines[id]) {
     delete view().lines[id];
@@ -733,7 +790,7 @@ window.addEventListener("keydown", e => {
 // --- Side panel ---------------------------------------------------------------
 function iconButton(label: string, title: string, fn: () => void) {
   const b = h("button", "icon", label);
-  b.title = title;
+  tip(b, title);
   b.onclick = e => {
     e.stopPropagation();
     fn();
@@ -770,7 +827,7 @@ function renderSide() {
   for (const [key, v] of Object.entries(layout.views)) {
     const row = h("div", "row" + (key === layout.activeView ? " active" : ""));
     const name = h("span", "grow", v.name);
-    name.title = "Double-click to rename";
+    tip(name, "Double-click to rename");
     name.ondblclick = () => {
       const input = h("input");
       input.value = v.name;
@@ -886,7 +943,7 @@ function renderContainers() {
     const place = () => (el.style.cssText = `left:${c.x}px;top:${c.y}px;width:${c.w}px;height:${c.h}px;`);
     place();
     const title = h("div", "c-title", c.title);
-    title.title = "Drag to move with its tables · double-click to rename · Del to delete";
+    tip(title, "Drag to move with its tables · double-click to rename · Del to delete");
     title.ondblclick = () => {
       const input = h("input");
       input.value = c.title;
@@ -1030,6 +1087,11 @@ window.addEventListener("message", e => {
     v.tables ??= {};
     v.lines ??= {};
     v.containers ??= [];
+    for (const [k, line] of Object.entries(v.lines)) {
+      if (!Array.isArray(line) || line.some(c => typeof c !== "number")) {
+        delete v.lines[k];
+      }
+    }
     if (!v.notes || Array.isArray(v.notes)) {
       v.notes = {};
     }

@@ -4,7 +4,7 @@ An offline visual editor and language support for the Database Markup Language (
 
 > **Status: early development.** Run `DBML: Open Visual Editor` on a `.dbml` file to open the diagram: pan, zoom, fit, drag tables, click a column or line to highlight its refs, double-click a table, column or line to jump to its code. The side panel has saved views (double-click to rename), hide/show tables, and search (Cmd/Ctrl+F opens the panel; Enter jumps between matches). Shift-click or shift-drag selects several tables to move together.
 
-- **Bend a line:** click it, then drag a handle (the hollow dots add a bend). Select the line and press Del/Backspace to reset it.
+- **Bend a line:** lines are horizontal/vertical. Click one, then drag a dot to slide that segment; the hollow dots at each end pull the line off its table to add a jog. Press Del/Backspace to reset it.
 - **Link mode:** drag a column onto a column of another table to add `Ref: "parent"."col" < "child"."col"` under the child table.
 - **Insert mode:** drop on the lower edge of a column instead to add a new `<parent>_<column>` column below it, plus its Ref.
 - **Notes:** `+ Note` adds a `Note` block to the DBML and shows it as a sticky note. Double-click it to edit the text in code.
