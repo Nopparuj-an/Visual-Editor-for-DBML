@@ -48,7 +48,7 @@ export class EditorPanel {
   private async onMessage(m: ToExtension) {
     switch (m.type) {
       case "ready":
-        return this.push();
+        return this.push(await readLayout(this.doc.uri));
       case "saveLayout":
         return writeLayout(this.doc.uri, m.layout);
       case "reveal": {
@@ -61,8 +61,7 @@ export class EditorPanel {
     }
   }
 
-  private async push() {
-    const layout: LayoutFile = await readLayout(this.doc.uri);
+  private push(layout?: LayoutFile) {
     let msg: ToWebview;
     try {
       msg = { type: "state", schema: parseDbml(this.doc.getText()), layout };

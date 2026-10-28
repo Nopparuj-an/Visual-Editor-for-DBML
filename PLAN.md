@@ -10,7 +10,7 @@
 
 ## Phases
 1. Foundation (done): rebrand, esbuild, vitest, panel + model + layout scaffold.
-2. Viewer MVP: render tables/refs, pan/zoom/fit, theming, double-click to source.
+2. Viewer MVP (done): render tables/refs, pan/zoom/fit, theming via VS Code colors, double-click to source, drag tables, ref highlight.
 3. Layout persistence: drag, group drag, views, hide/show, search.
 4. Interactions: ref highlight + direction, icons, note previews, reset line (Del), link/insert modes, notes, containers.
 5. Auto arrange: ELK placement/routing, pins, custom routing pass.
