@@ -2,7 +2,7 @@ export const css = `
 html, body, #root { margin: 0; height: 100%; overflow: hidden; }
 body { background: var(--vscode-editor-background); color: var(--vscode-editor-foreground);
   font-family: var(--vscode-font-family); font-size: 12px; user-select: none; }
-#viewport { position: absolute; inset: 0; cursor: grab; }
+#viewport { position: absolute; inset: 0 0 0 240px; overflow: hidden; cursor: grab; }
 #viewport.panning { cursor: grabbing; }
 #world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
 #lines { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; }
@@ -36,4 +36,24 @@ marker path { fill: context-stroke; }
 #msg { position: absolute; left: 12px; top: 12px; padding: 6px 10px; border-radius: 4px; max-width: 60%;
   background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); white-space: pre-wrap; }
 #msg:empty { display: none; }
+#side { position: absolute; left: 0; top: 0; bottom: 0; width: 240px; box-sizing: border-box; overflow-y: auto;
+  border-right: 1px solid var(--vscode-panel-border); background: var(--vscode-sideBar-background, var(--vscode-editor-background)); padding: 8px; }
+#side input { width: 100%; box-sizing: border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border, transparent); border-radius: 3px; padding: 4px 6px; font: inherit; user-select: text; }
+#side input:focus { outline: 1px solid var(--vscode-focusBorder); }
+.section { margin-top: 14px; }
+.section-head { display: flex; align-items: center; gap: 2px; text-transform: uppercase; font-size: 10px; letter-spacing: .05em; opacity: .7; margin-bottom: 4px; }
+.section-head span { flex: 1; }
+.row { display: flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 3px; cursor: pointer; height: 22px; }
+.row:hover { background: var(--vscode-list-hoverBackground); }
+.row.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+.row.off { opacity: .45; }
+.grow { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.icon { background: transparent; color: inherit; border: 0; cursor: pointer; border-radius: 3px; padding: 0 5px; height: 20px; font: inherit; }
+button.icon:hover { background: var(--vscode-toolbar-hoverBackground); }
+.table.sel { outline: 2px solid var(--vscode-focusBorder); outline-offset: 1px; }
+.table.faded { opacity: .25; }
+.col.found { background: var(--vscode-editor-findMatchHighlightBackground); }
+#marquee { position: absolute; border: 1px dashed var(--vscode-focusBorder); background: var(--vscode-editor-selectionBackground); opacity: .5; pointer-events: none; }
+#marquee[hidden] { display: none; }
 `;
