@@ -108,6 +108,7 @@
 		"vitest": "^5.0.5"
 	},
 	"dependencies": {
-		"@dbml/core": "^11.0.0"
+		"@dbml/core": "^11.0.0",
+		"elkjs": "^0.12.0"
 	}
 }

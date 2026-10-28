@@ -46,6 +46,18 @@ marker path { fill: context-stroke; }
   background: var(--vscode-editorHoverWidget-background, var(--vscode-editorWidget-background)); color: var(--vscode-editorHoverWidget-foreground, inherit);
   border: 1px solid var(--vscode-editorHoverWidget-border, var(--vscode-editorWidget-border)); box-shadow: 0 2px 8px rgba(0,0,0,.3); }
 #tip[hidden] { display: none; }
+.pin { position: absolute; right: 7px; top: 8px; z-index: 1; width: 16px; height: 16px; padding: 0; display: flex; align-items: center; justify-content: center;
+  background: transparent; color: inherit; border: 0; border-radius: 3px; cursor: pointer; opacity: 0; }
+.table:hover .pin { opacity: .5; }
+.table .pin.on { opacity: 1; color: var(--vscode-focusBorder); }
+.pin:hover { background: var(--vscode-toolbar-hoverBackground); opacity: 1; }
+.table-head { padding-right: 28px !important; }
+#menu { position: absolute; right: 12px; bottom: 56px; z-index: 10; display: flex; flex-direction: column; padding: 4px; border-radius: 6px;
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background)); border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+  box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+#menu[hidden] { display: none; }
+#menu button { background: transparent; color: inherit; border: 0; text-align: left; padding: 5px 12px; border-radius: 4px; cursor: pointer; font: inherit; }
+#menu button:hover { background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground)); }
 .table-note { height: 20px; line-height: 20px; padding: 0 10px; font-style: italic; opacity: .7; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border)); box-sizing: border-box; }
 #overlay { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; z-index: 3; }

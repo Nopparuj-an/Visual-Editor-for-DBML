@@ -85,7 +85,7 @@ Table products {
   created_at datetime [not null, default: `now()`]
 
   Note: '''
-    This is a multiline comment\
+    This is a multiline comment\n
     This is a multiline comment
     This is a multiline comment
     \'''\ttest

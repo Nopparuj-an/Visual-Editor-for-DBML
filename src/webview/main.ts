@@ -2,6 +2,8 @@ import type { LayoutFile, ViewState } from "../layout";
 import type { ColumnModel } from "../model";
 import type { RefModel, SchemaModel, TableModel } from "../model";
 import type { ToExtension, ToWebview } from "../messages";
+import { arrange, Direction } from "./arrange";
+import { Req, routeAll, routePoints } from "./router";
 import { css } from "./styles";
 
 declare function acquireVsCodeApi(): { postMessage(m: ToExtension): void };
@@ -15,6 +17,7 @@ const PAD_B = 2;
 const BORDER = 1;
 const STUB = 18;
 const NOTE_H = 20;
+const PIN_SVG = '<svg viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M9.5 1l5.5 5.5-1.4 1.4-.9-.9-2.8 2.8c.5 1.5.2 3-.8 4L6.4 10.7 2.7 14.4 1.6 13.3l3.7-3.7L2.1 6.4c1-1 2.5-1.3 4-.8l2.8-2.8-.9-.9L9.5 1z"/></svg>';
 const STICKY_W = 200;
 const GAP_X = 120;
 const GAP_Y = 40;
@@ -379,6 +382,16 @@ function render() {
     head.ondblclick = () => api.postMessage({ type: "reveal", line: t.range.startLine });
     head.onpointerdown = e => dragTable(e, t.id);
     el.append(head);
+    const pin = h("button", "pin" + (p.pinned ? " on" : ""));
+    pin.innerHTML = PIN_SVG;
+    tip(pin, p.pinned ? "Pinned: arrange won't move it (click to unpin)" : "Pin so arrange won't move it");
+    pin.onpointerdown = e => e.stopPropagation();
+    pin.onclick = () => {
+      p.pinned = p.pinned ? undefined : true;
+      save();
+      render();
+    };
+    el.append(pin);
     if (t.note) {
       const lines = t.note.trim().split(/\r?\n/).filter(l => l.trim());
       const note = h("div", "table-note", lines[0] + (lines.length > 1 ? " …" : ""));
@@ -461,7 +474,7 @@ function dragTable(e: PointerEvent, id: string) {
       el.style.left = `${m.p.x}px`;
       el.style.top = `${m.p.y}px`;
     }
-    drawRefs();
+    scheduleRefs();
   };
   const up = () => {
     target.removeEventListener("pointermove", move);
@@ -496,21 +509,6 @@ let routes = new Map<string, Route>();
 
 const mid = (p: Pt, q: Pt): Pt => ({ x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 });
 
-function routePoints(a: Pt, b: Pt, channels: number[]): Pt[] {
-  const pts: Pt[] = [a];
-  let x = a.x, y = a.y;
-  channels.forEach((c, i) => {
-    if (i % 2 === 0) {
-      x = c;
-    } else {
-      y = c;
-    }
-    pts.push({ x, y });
-  });
-  pts.push({ x, y: b.y }, b);
-  return pts;
-}
-
 /** Orthogonal polyline with small rounded corners. */
 function roundedPath(points: Pt[], radius = 6) {
   const p = points.filter((q, i) => i === 0 || q.x !== points[i - 1].x || q.y !== points[i - 1].y);
@@ -529,6 +527,9 @@ function roundedPath(points: Pt[], radius = 6) {
 function drawRefs() {
   linesLayer.replaceChildren();
   routes = new Map();
+  const shown = items();
+  const index = new Map(shown.map((i, n) => [i.id, n]));
+  const pending: { ref: RefModel; src: RefModel["from"]; dst: RefModel["to"]; req: Req }[] = [];
   for (const r of schema!.refs) {
     // Draw from the "many" side toward the "one" side so the arrowhead points at the referenced key.
     const [src, dst] = r.from.relation === "1" && r.to.relation === "*" ? [r.to, r.from] : [r.from, r.to];
@@ -548,9 +549,19 @@ function drawRefs() {
       continue;
     }
     const manual = view().lines[r.id];
-    const channels = manual?.length ? manual : [defaultChannel(a, b)];
-    const pts = routePoints(a, b, channels);
-    routes.set(r.id, { a, b, channels, manual: !!manual?.length, pts });
+    pending.push({
+      ref: r,
+      src,
+      dst,
+      req: { id: r.id, a, b, srcObs: index.get(src.table)!, dstObs: index.get(dst.table)!, manual: manual?.length ? manual : undefined }
+    });
+  }
+  const channels = routeAll(pending.map(p => p.req), shown);
+  for (const { ref: r, src, dst, req } of pending) {
+    const { a, b } = req;
+    const ch = channels.get(r.id)!;
+    const pts = routePoints(a, b, ch);
+    routes.set(r.id, { a, b, channels: ch, manual: !!req.manual, pts });
     const d = roundedPath(pts);
     const g = s("g", { "data-ref": r.id });
     g.append(
@@ -566,12 +577,11 @@ function drawRefs() {
   applySelection();
 }
 
-/** x of the vertical run: halfway between the tables, or outside both when the line loops out the same side. */
-function defaultChannel(a: Anchor, b: Anchor) {
-  if (a.dir === b.dir) {
-    return a.dir > 0 ? Math.max(a.x, b.x) + STUB * 1.5 : Math.min(a.x, b.x) - STUB * 1.5;
-  }
-  return (a.x + b.x) / 2;
+let refFrame = 0;
+/** Redraw the lines at most once per frame while something is being dragged. */
+function scheduleRefs() {
+  cancelAnimationFrame(refFrame);
+  refFrame = requestAnimationFrame(drawRefs);
 }
 
 function cardinality(at: Anchor, label: string) {
@@ -900,6 +910,67 @@ function renderSide() {
   }
 }
 
+// --- Arrange ------------------------------------------------------------------
+async function runArrange(dir: Direction) {
+  const v = view();
+  const shown = schema!.tables.filter(t => !v.tables[t.id].hidden);
+  const ids = new Set(shown.map(t => t.id));
+  const nodes = shown.map(t => ({
+    id: t.id,
+    w: TABLE_W,
+    h: tableHeight(t),
+    x: v.tables[t.id].x,
+    y: v.tables[t.id].y,
+    pinned: !!v.tables[t.id].pinned
+  }));
+  // Edges point many -> one, like the arrows, so referenced tables end up downstream.
+  const edges = schema!.refs
+    .filter(r => ids.has(r.from.table) && ids.has(r.to.table))
+    .map(r => (r.from.relation === "1" && r.to.relation === "*" ? { from: r.to.table, to: r.from.table } : { from: r.from.table, to: r.to.table }));
+  const pos = await arrange(nodes, edges, dir);
+  for (const [id, p] of pos) {
+    v.tables[id].x = p.x;
+    v.tables[id].y = p.y;
+  }
+  for (const r of schema!.refs) {
+    delete v.lines[r.id];
+  }
+  save();
+  render();
+  fit();
+}
+
+const menu = h("div");
+menu.id = "menu";
+menu.hidden = true;
+for (const [label, dir] of [
+  ["Left → right", "RIGHT"],
+  ["Right → left", "LEFT"],
+  ["Top → bottom", "DOWN"],
+  ["Bottom → top", "UP"],
+  ["Grid", "GRID"]
+] as const) {
+  const b = h("button", undefined, label);
+  b.onclick = () => {
+    menu.hidden = true;
+    runArrange(dir);
+  };
+  menu.append(b);
+}
+root.append(menu);
+const arrangeBtn = h("button", undefined, "Arrange ▴");
+tip(arrangeBtn, "Auto-arrange the visible tables (pinned tables stay put; resets bent lines)");
+arrangeBtn.onclick = e => {
+  e.stopPropagation();
+  menu.hidden = !menu.hidden;
+};
+bar.prepend(arrangeBtn);
+document.addEventListener("pointerdown", e => {
+  if (!menu.contains(e.target as Node)) {
+    menu.hidden = true;
+  }
+});
+
 // --- Containers ---------------------------------------------------------------
 const containerEls: HTMLElement[] = [];
 let selectedContainer: string | null = null;
@@ -981,7 +1052,7 @@ function renderContainers() {
           t.style.left = `${m.p.x}px`;
           t.style.top = `${m.p.y}px`;
         }
-        drawRefs();
+        scheduleRefs();
       };
       trackPointer(move);
     };

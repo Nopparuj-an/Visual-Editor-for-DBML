@@ -13,4 +13,4 @@
 2. Viewer MVP (done): render tables/refs, pan/zoom/fit, theming via VS Code colors, double-click to source, drag tables, ref highlight.
 3. Layout persistence (done): drag, group drag (shift-click, shift-drag marquee), saved views, hide/show tables, search.
 4. Interactions (done, except the polish listed in the README): ref highlight + direction, icons, note previews, reset line (Del), link/insert modes, notes, containers.
-5. Auto arrange: ELK placement/routing, pins, custom routing pass.
+5. Auto arrange (done): ELK layered placement, pins, custom orthogonal router with lanes (src/webview/router.ts).
