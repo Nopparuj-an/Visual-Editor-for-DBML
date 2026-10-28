@@ -15,7 +15,7 @@
 	"license": "MIT",
 	"icon": "images/dbml-logo.png",
 	"version": "0.1.0",
-	"publisher": "Nopparuj-an",
+	"publisher": "Nopparuj",
 	"engines": {
 		"vscode": "^1.140.0"
 	},

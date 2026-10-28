@@ -2,7 +2,7 @@
 
 An offline visual editor and language support for [DBML](https://dbml.org) in VS Code. No account and no sign-in: open a `.dbml` file and edit your schema as a diagram next to the code.
 
-<!-- TODO: add a screenshot of the diagram here, e.g. images/screenshot.png -->
+![The visual editor showing tables, routed lines, a highlighted ref and a sticky note](images/screenshot.png)
 
 ## Visual editor
 
@@ -47,8 +47,6 @@ Layout is keyed by table name, so renaming a table resets its position and pin.
 - **DBML: From SQL** imports a `.sql` file (PostgreSQL, MySQL or SQL Server) as DBML.
 
 Snippets: `table`, `enum`, `oto` (one-to-one), `otm` (one-to-many), `mto` (many-to-one), `mtm` (many-to-many join table).
-
-![Syntax example](images/dbml_syntax_example.png)
 
 > If you also have another DBML extension installed, disable it for `.dbml` files. Two extensions registering the same language will conflict.
 
