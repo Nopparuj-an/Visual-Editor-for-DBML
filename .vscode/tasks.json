@@ -3,16 +3,10 @@
 	"tasks": [
 		{
 			"type": "npm",
-			"script": "webpack",
-			"problemMatcher": "$tsc-watch",
-			"isBackground": true,
-			"presentation": {
-				"reveal": "never"
-			},
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			}
+			"script": "build",
+			"problemMatcher": [],
+			"presentation": { "reveal": "silent" },
+			"group": { "kind": "build", "isDefault": true }
 		}
 	]
 }

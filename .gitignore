@@ -4,3 +4,4 @@ node_modules
 *.vsix
 *.layout.json
 dist/
+.DS_Store

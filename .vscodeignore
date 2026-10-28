@@ -3,7 +3,8 @@ node_modules
 out/
 test/
 src/
-test/
 tsconfig.json
 dist/**/*.map
 .gitignore
+PLAN.md
+.github

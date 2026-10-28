@@ -3,11 +3,18 @@
 All notable changes to the "Visual Editor for DBML" extension will be documented in this file.
 
 ## [0.1.0] - Unreleased
+### Added
+- Visual editor (`DBML: Open Visual Editor to the Side`): pan/zoom/fit, drag and group-select tables, ref highlighting, double-click to jump to code
+- Orthogonal auto-routed lines with lanes, segment bending, Del to reset
+- Arrange (parents left/right/top/bottom, grid) and pinned tables
+- Saved views, hide/show tables, search, sticky notes (`Note` blocks) and containers
+- Link mode and insert mode to add refs and columns by dragging
+- Layout sidecar file `<name>.dbml.layout.json`
+- SQL Server import
+
 ### Changed
 - Rebranded from vscode-dbml to Visual Editor for DBML; command IDs are now `dbmlVisualEditor.*`
 - Replaced webpack with esbuild, updated all dependencies (`@dbml/core` 11)
-### Added
-- `DBML: Open Visual Editor` command with webview scaffold, parse model, and layout sidecar format
 
 ## Earlier history (vscode-dbml by Matthew Meyers)
 

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="208" height="208" viewBox="0 0 208 208" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M207.586 38.8387C207.586 17.3887 190.198 0 168.748 0H38.8387C17.3887 0 -1.52588e-05 17.3887 -1.52588e-05 38.8387V168.748C-1.52588e-05 190.198 17.3887 207.586 38.8387 207.586H168.748C190.198 207.586 207.586 190.198 207.586 168.748V38.8387Z" fill="#5d6b88"/>
+  <rect x="15.282" y="91.613" width="54.694" height="30.168" style="fill: rgb(222, 226, 235);" rx="6" ry="6"/>
+  <rect x="100.129" y="29.256" width="61.983" height="43.534" style="fill: rgb(222, 226, 235); stroke-width: 1;" rx="6" ry="6"/>
+  <rect x="126.817" y="141.77" width="61.983" height="35.25" style="fill: rgb(222, 226, 235); stroke-width: 1;" rx="6" ry="6"/>
+  <polyline style="stroke: rgb(222, 226, 235); stroke-width: 3px;" points="69.679 106.833 85.714 106.833 85.714 50.151 100.834 50.151"/>
+  <polyline style="stroke: rgb(222, 226, 235); stroke-width: 3px;" points="127.474 159.42 112.701 159.42 112.701 106.852 69.663 106.852"/>
+</svg>

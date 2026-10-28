@@ -1,20 +1,36 @@
 {
 	"name": "dbml-visual-editor",
 	"displayName": "Visual Editor for DBML",
-	"description": "Offline visual editor and language support for DBML: pan, zoom, arrange and edit your schema as a diagram.",
+	"description": "Offline visual editor and language support for DBML in VSCode: pan, zoom, arrange and edit your schema as a diagram.",
+	"keywords": [
+		"dbml",
+		"database",
+		"schema",
+		"diagram",
+		"erd",
+		"entity relationship",
+		"visual editor",
+		"sql"
+	],
+	"license": "MIT",
 	"icon": "images/dbml-logo.png",
 	"version": "0.1.0",
-	"publisher": "nopparuj",
+	"publisher": "Nopparuj-an",
 	"engines": {
 		"vscode": "^1.140.0"
 	},
 	"categories": [
 		"Programming Languages",
-		"Snippets"
+		"Snippets",
+		"Visualization"
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/Nopparuj-an/dbml-visual-editor.git"
+		"url": "https://github.com/Nopparuj-an/Visual-Editor-for-DBML"
+	},
+	"homepage": "https://github.com/Nopparuj-an/Visual-Editor-for-DBML#readme",
+	"bugs": {
+		"url": "https://github.com/Nopparuj-an/Visual-Editor-for-DBML/issues"
 	},
 	"main": "./dist/extension.js",
 	"contributes": {
@@ -110,5 +126,8 @@
 	"dependencies": {
 		"@dbml/core": "^11.0.0",
 		"elkjs": "^0.12.0"
+	},
+	"author": {
+		"name": "Nopparuj"
 	}
 }

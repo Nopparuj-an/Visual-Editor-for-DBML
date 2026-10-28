@@ -28,6 +28,8 @@ export class EditorPanel {
       vscode.ViewColumn.Beside,
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [dist] }
     );
+    // A dimmer variant of the DBML file icon, so the diagram tab reads differently from the code tab.
+    this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, "icons", "dbml-viewer.svg");
     this.panel.webview.html = this.html(dist);
 
     this.panel.webview.onDidReceiveMessage(
