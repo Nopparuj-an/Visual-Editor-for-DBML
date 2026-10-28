@@ -2,7 +2,7 @@
 
 An offline visual editor and language support for the Database Markup Language ([DBML](https://dbml.org)) in VS Code. No account, no sign-in.
 
-> **Status: early development.** Run `DBML: Open Visual Editor` on a `.dbml` file to open the diagram: pan, zoom, fit, drag tables, click a column or line to highlight its refs, double-click a table, column or line to jump to its code. The side panel has saved views (double-click to rename), hide/show tables, and search (⌘F; Enter jumps between matches). Shift-click or shift-drag selects several tables to move together. Tables without a saved position are placed in a simple grid for now. See [PLAN.md](./PLAN.md).
+> **Status: early development.** Run `DBML: Open Visual Editor` on a `.dbml` file to open the diagram: pan, zoom, fit, drag tables, click a column or line to highlight its refs, double-click a table, column or line to jump to its code. The side panel has saved views (double-click to rename), hide/show tables, and search (Cmd/Ctrl+F opens the panel; Enter jumps between matches). Shift-click or shift-drag selects several tables to move together. Tables without a saved position are placed in a simple grid for now. See [PLAN.md](./PLAN.md).
 
 Layout (positions, views, notes, containers) is stored in a sidecar file, `<name>.dbml.layout.json`, which you can commit or gitignore.
 

@@ -10,6 +10,9 @@ const SVG = "http://www.w3.org/2000/svg";
 const TABLE_W = 240;
 const HEAD_H = 28;
 const ROW_H = 22;
+const PAD_B = 6;
+const BORDER = 1;
+const STUB = 18;
 const GAP_X = 120;
 const GAP_Y = 40;
 const MIN_ZOOM = 0.1;
@@ -35,7 +38,7 @@ function s<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, s
   return e;
 }
 
-const tableHeight = (t: TableModel) => HEAD_H + t.columns.length * ROW_H;
+const tableHeight = (t: TableModel) => HEAD_H + t.columns.length * ROW_H + PAD_B + BORDER * 2;
 
 let schema: SchemaModel | null = null;
 let layout: LayoutFile | null = null;
@@ -53,7 +56,7 @@ const world = h("div");
 world.id = "world";
 const lines = s("svg");
 lines.id = "lines";
-lines.innerHTML = `<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,1 L10,5 L0,9 z"/></marker></defs>`;
+lines.innerHTML = `<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,1 L10,5 L0,9 z"/></marker></defs>`;
 const linesLayer = s("g");
 lines.appendChild(linesLayer);
 world.append(lines);
@@ -72,12 +75,12 @@ for (const [label, fn] of [
   b.onclick = fn;
   bar.append(b);
 }
-bar.insertBefore(zoomLabel, bar.children[2]);
+bar.insertBefore(zoomLabel, bar.children[1]);
 const side = h("div");
 side.id = "side";
 const search = h("input");
 search.id = "search";
-search.placeholder = "Search tables, columns, notes…  (⌘F)";
+search.placeholder = "Search…";
 const viewsBox = h("div", "section");
 const tablesBox = h("div", "section");
 side.append(search, viewsBox, tablesBox);
@@ -85,15 +88,17 @@ const marquee = h("div");
 marquee.id = "marquee";
 marquee.hidden = true;
 const sideToggle = h("button", undefined, "☰");
+sideToggle.id = "sideToggle";
 sideToggle.title = "Toggle side panel";
-sideToggle.onclick = () => {
-  const hide = side.style.display !== "none";
-  side.style.display = hide ? "none" : "";
-  viewport.style.left = hide ? "0" : `${SIDE_W}px`;
-};
-bar.prepend(sideToggle);
+function setSide(open: boolean) {
+  side.style.display = open ? "" : "none";
+  viewport.style.left = open ? `${SIDE_W}px` : "0";
+  sideToggle.classList.toggle("open", open);
+}
+sideToggle.onclick = () => setSide(side.style.display === "none");
+setSide(false);
 viewport.append(marquee);
-root.append(side, viewport, msg, bar);
+root.append(side, viewport, msg, bar, sideToggle);
 
 // --- Camera -----------------------------------------------------------------
 let saveTimer: number | undefined;
@@ -342,7 +347,7 @@ function anchor(tableId: string, column: string, side: 1 | -1): Anchor | null {
   if (!t || !p || i < 0) {
     return null;
   }
-  return { x: p.x + (side === 1 ? TABLE_W : 0), y: p.y + HEAD_H + i * ROW_H + ROW_H / 2, dir: side };
+  return { x: p.x + (side === 1 ? TABLE_W : 0), y: p.y + BORDER + HEAD_H + i * ROW_H + ROW_H / 2, dir: side };
 }
 
 function drawRefs() {
@@ -365,8 +370,10 @@ function drawRefs() {
     if (!a || !b) {
       continue;
     }
-    const reach = Math.max(40, Math.abs(b.x - a.x) / 2);
-    const d = `M${a.x},${a.y} C${a.x + a.dir * reach},${a.y} ${b.x + b.dir * reach},${b.y} ${b.x},${b.y}`;
+    // Straight stubs leave/enter each table horizontally, so the curve never bends right at the arrowhead.
+    const ax = a.x + a.dir * STUB, bx = b.x + b.dir * STUB;
+    const reach = Math.max(40, Math.abs(bx - ax) / 2);
+    const d = `M${a.x},${a.y} L${ax},${a.y} C${ax + a.dir * reach},${a.y} ${bx + b.dir * reach},${b.y} ${bx},${b.y} L${b.x},${b.y}`;
     const g = s("g", { "data-ref": r.id });
     g.append(
       s("path", { d, class: "ref", "marker-end": "url(#arrow)" }),
@@ -506,6 +513,7 @@ search.addEventListener("keydown", e => {
 window.addEventListener("keydown", e => {
   if ((e.metaKey || e.ctrlKey) && e.key === "f") {
     e.preventDefault();
+    setSide(true);
     search.focus();
     search.select();
   }
