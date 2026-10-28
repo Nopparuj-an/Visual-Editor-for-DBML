@@ -1,5 +1,5 @@
 import type { LayoutFile, ViewState } from "../layout";
-import type { ColumnModel } from "../model";
+import type { ColumnModel, EnumModel } from "../model";
 import type { RefModel, SchemaModel, TableModel } from "../model";
 import type { ToExtension, ToWebview } from "../messages";
 import { arrange, Direction } from "./arrange";
@@ -97,7 +97,7 @@ function items(): Item[] {
   for (const t of schema?.tables ?? []) {
     const p = view().tables[t.id];
     if (p && !p.hidden) {
-      out.push({ id: t.id, x: p.x, y: p.y, w: TABLE_W, h: tableHeight(t) });
+      out.push({ id: t.id, x: p.x, y: p.y, w: tw(t.id), h: tableHeight(t) });
     }
   }
   for (const n of schema?.notes ?? []) {
@@ -305,7 +305,7 @@ function placeNewTables() {
       rowH = 0;
     }
     v.tables[t.id] = { x, y };
-    x += TABLE_W + GAP_X;
+    x += tw(t.id) + GAP_X;
     rowH = Math.max(rowH, tableHeight(t));
   });
   save();
@@ -334,6 +334,66 @@ function placeNewNotes() {
   save();
 }
 
+// --- Table sizing -------------------------------------------------------------
+const widths = new Map<string, number>();
+const tw = (id: string) => widths.get(id) ?? TABLE_W;
+let fks = new Set<string>();
+
+interface Badge { label: string; hint: string; circle?: boolean }
+
+function columnBadges(t: TableModel, c: ColumnModel): Badge[] {
+  const out: Badge[] = [];
+  const en = c.enumId ? schema!.enums.find(e => e.id === c.enumId) : undefined;
+  if (c.pk) {
+    out.push({ label: "PK", hint: "Primary key" });
+  }
+  if (fks.has(`${t.id}.${c.name}`)) {
+    out.push({ label: "FK", hint: "Foreign key" });
+  }
+  if (c.notNull) {
+    out.push({ label: "NN", hint: "Not null" });
+  }
+  if (c.unique) {
+    out.push({ label: "UQ", hint: "Unique" });
+  }
+  if (c.increment) {
+    out.push({ label: "AI", hint: "Auto increment" });
+  }
+  if (en) {
+    out.push({ label: "E", hint: enumText(en) });
+  }
+  if (c.note) {
+    out.push({ label: "i", hint: c.note, circle: true });
+  }
+  return out;
+}
+
+const enumText = (e: EnumModel) =>
+  `enum ${e.name}\n${e.values.map(v => `• ${v.name}${v.note ? ` — ${v.note}` : ""}`).join("\n")}`;
+
+const measureCtx = document.createElement("canvas").getContext("2d")!;
+function textWidth(text: string, weight: number, px: number) {
+  measureCtx.font = `${weight} ${px}px ${getComputedStyle(document.body).fontFamily}`;
+  return measureCtx.measureText(text).width;
+}
+
+/** Wide enough for the longest column row (name, type and badges) and the header, within limits. */
+function measureTables() {
+  widths.clear();
+  const font = parseFloat(getComputedStyle(document.body).fontSize) || 12;
+  for (const t of schema!.tables) {
+    let w = 10 + textWidth((t.schema ? `${t.schema}.` : "") + t.name, 600, font) + 28;
+    for (const c of t.columns) {
+      let row = 10 + textWidth(c.name, 400, font) + 8 + textWidth(c.type, 400, font) + 10;
+      for (const b of columnBadges(t, c)) {
+        row += 8 + (b.circle ? 13 : textWidth(b.label, 700, 9) + 8);
+      }
+      w = Math.max(w, row);
+    }
+    widths.set(t.id, Math.min(560, Math.max(TABLE_W, Math.ceil((w + 4) / 10) * 10)));
+  }
+}
+
 // --- Rendering --------------------------------------------------------------
 const tableEls = new Map<string, HTMLElement>();
 const colEls = new Map<string, HTMLElement>();
@@ -348,9 +408,7 @@ function render() {
   if (!schema) {
     return;
   }
-  placeNewTables();
-  placeNewNotes();
-  const fks = new Set<string>();
+  fks = new Set<string>();
   for (const r of schema.refs) {
     for (const e of [r.from, r.to]) {
       if (e.relation === "*" || (r.from.relation === "1" && r.to.relation === "1" && e === r.from)) {
@@ -358,6 +416,9 @@ function render() {
       }
     }
   }
+  measureTables();
+  placeNewTables();
+  placeNewNotes();
   for (const id of [...selected]) {
     if (!schema.tables.some(t => t.id === id) && !schema.notes.some(n => `note:${n.name}` === id)) {
       selected.delete(id);
@@ -369,7 +430,7 @@ function render() {
       continue;
     }
     const el = h("div", "table");
-    el.style.cssText = `left:${p.x}px;top:${p.y}px;width:${TABLE_W}px;height:${tableHeight(t)}px;`;
+    el.style.cssText = `left:${p.x}px;top:${p.y}px;width:${tw(t.id)}px;height:${tableHeight(t)}px;`;
     if (t.headerColor) {
       el.style.setProperty("--table-color", t.headerColor);
     }
@@ -400,29 +461,15 @@ function render() {
     }
     for (const c of t.columns) {
       const row = h("div", "col");
-      const en = c.enumId ? schema.enums.find(e => e.id === c.enumId) : undefined;
-      const enumInfo = en ? `enum ${en.name}\n${en.values.map(v => `• ${v.name}${v.note ? ` — ${v.note}` : ""}`).join("\n")}` : "";
       const type = h("span", "type", c.type);
-      tip(type, enumInfo);
+      const badges = columnBadges(t, c);
+      const en = badges.find(x => x.label === "E");
+      tip(type, en?.hint);
       row.append(h("span", "name", c.name), type);
-      for (const [on, label, hint] of [
-        [c.pk, "PK", "Primary key"],
-        [fks.has(`${t.id}.${c.name}`), "FK", "Foreign key"],
-        [c.notNull, "NN", "Not null"],
-        [c.unique, "UQ", "Unique"],
-        [c.increment, "AI", "Auto increment"],
-        [!!enumInfo, "E", enumInfo]
-      ] as const) {
-        if (on) {
-          const b = h("span", "badge", label);
-          tip(b, hint);
-          row.append(b);
-        }
-      }
-      if (c.note) {
-        const n = h("span", "badge note", "i");
-        tip(n, c.note);
-        row.append(n);
+      for (const bd of badges) {
+        const b = h("span", bd.circle ? "badge note" : "badge", bd.label);
+        tip(b, bd.hint);
+        row.append(b);
       }
       row.ondblclick = () => api.postMessage({ type: "reveal", line: c.range.startLine });
       row.onclick = () => !justDragged && select(null, { table: t.id, column: c.name });
@@ -502,7 +549,7 @@ function anchor(tableId: string, column: string, side: 1 | -1): Anchor | null {
   if (!t || !p || i < 0) {
     return null;
   }
-  return { x: p.x + (side === 1 ? TABLE_W : 0), y: p.y + BORDER + headHeight(t) + i * ROW_H + ROW_H / 2, dir: side };
+  return { x: p.x + (side === 1 ? tw(tableId) : 0), y: p.y + BORDER + headHeight(t) + i * ROW_H + ROW_H / 2, dir: side };
 }
 
 type Pt = { x: number; y: number };
@@ -547,10 +594,10 @@ function drawRefs(settled = true) {
       continue;
     }
     let ss: 1 | -1 = 1, ds: 1 | -1 = -1;
-    if (sp.x > dp.x + TABLE_W) {
+    if (sp.x > dp.x + tw(dst.table)) {
       ss = -1;
       ds = 1;
-    } else if (sp.x + TABLE_W >= dp.x && dp.x + TABLE_W >= sp.x) {
+    } else if (sp.x + tw(src.table) >= dp.x && dp.x + tw(dst.table) >= sp.x) {
       ds = 1; // overlapping columns of tables: loop out the right side
     }
     const a = anchor(src.table, src.columns[0], ss), b = anchor(dst.table, dst.columns[0], ds);
@@ -729,7 +776,7 @@ function centerOn(id: string) {
   const t = schema!.tables.find(x => x.id === id)!;
   const p = view().tables[id];
   const c = view().camera;
-  c.x = viewport.clientWidth / 2 - (p.x + TABLE_W / 2) * c.zoom;
+  c.x = viewport.clientWidth / 2 - (p.x + tw(id) / 2) * c.zoom;
   c.y = viewport.clientHeight / 2 - (p.y + tableHeight(t) / 2) * c.zoom;
   applyCamera();
   save();
@@ -926,7 +973,7 @@ async function runArrange(dir: Direction) {
   const ids = new Set(shown.map(t => t.id));
   const nodes = shown.map(t => ({
     id: t.id,
-    w: TABLE_W,
+    w: tw(t.id),
     h: tableHeight(t),
     x: v.tables[t.id].x,
     y: v.tables[t.id].y,

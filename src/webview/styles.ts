@@ -25,7 +25,7 @@ marker path { fill: context-stroke; }
 .col:hover { background: var(--vscode-list-hoverBackground); }
 .col.hot { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
 .col .name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-.col .type { opacity: .6; }
+.col .type { opacity: .6; flex-shrink: 0; }
 .sticky { position: absolute; z-index: 2; box-sizing: border-box; padding: 8px 10px; background: #f6e58d; color: #2d2a1c; border-radius: 3px;
   box-shadow: 2px 3px 8px rgba(0,0,0,.35); cursor: move; max-height: 260px; overflow: hidden; }
 .sticky-title { font-weight: 700; font-size: 10px; text-transform: uppercase; opacity: .6; margin-bottom: 4px; }

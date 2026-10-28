@@ -73,11 +73,19 @@ const rangeOf = (token: any): SourceRange => ({
   endLine: token.end.line - 1
 });
 
-/** An unqualified type name resolves within the table's own schema first, then the default one. */
+/**
+ * Which enum a column type refers to. Handles qualified names (`auth.role`), an explicit `public.`
+ * prefix, array suffixes and arguments; an unqualified name resolves in the table's own schema first.
+ */
 function enumIdOf(type: any, schema: string | undefined, enums: EnumModel[]): string | undefined {
-  const name: string = type.type_name;
-  const wanted = type.schemaName ? [tableId(type.schemaName, name)] : [tableId(schema, name), name];
-  return enums.find(e => wanted.includes(e.id))?.id;
+  const name = String(type.type_name).replace(/\[\]$/, "").replace(/\(.*\)$/, "");
+  const qualified = type.schemaName && type.schemaName !== "public" ? tableId(type.schemaName, name) : undefined;
+  const wanted = qualified ? [qualified] : [tableId(schema, name), name];
+  return (
+    enums.find(e => wanted.includes(e.id))?.id ??
+    // Dotted type_name such as `auth.role` when the parser did not split the schema off.
+    enums.find(e => e.id === name)?.id
+  );
 }
 
 /** Parse DBML source into a plain, serializable model. Throws on syntax errors. */
